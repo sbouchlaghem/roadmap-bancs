@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="fr" data-theme="sombre">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">◆</span>
+    <div>
+      <h1 id="titre">Roadmap</h1>
+      <p class="sub" id="resume">Chargement…</p>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-view="roadmap" aria-selected="true">Roadmap</button>
+    <button role="tab" data-view="projets" aria-selected="false">Projets</button>
+    <button role="tab" data-view="prod" aria-selected="false">📦 En production</button>
+  </nav>
+  <div class="actions">
+    <label class="period">Du <input type="month" id="debut"></label>
+    <label class="period">au <input type="month" id="fin"></label>
+    <a class="btn" id="btn-pub" href="/api/publier" title="Publie le Gantt de cette période (versions à venir seulement) en lecture seule">⇪ Publier</a>
+    <button class="btn" id="btn-ppt" title="Générer la roadmap PowerPoint sur cette période">⬇ Export PPT</button>
+    <button class="btn" id="btn-drawio" title="Roadmap de cette période en fichier draw.io (modifiable)">⬇ draw.io</button>
+    <button class="btn" id="btn-params" title="Paramètres : titre, thème, publication, pôles, couleurs…" aria-label="Paramètres">⚙</button>
+    <button class="btn primary" id="btn-new">＋ Projet</button>
+  </div>
+</header>
+
+<main>
+  <section id="view-roadmap" class="view">
+    <div class="alerts" id="alerts" role="status" hidden></div>
+    <div class="legend" id="legend"></div>
+    <div class="gantt-wrap"><div class="gantt" id="gantt"></div></div>
+    <section class="equipe-vue" id="jalons-vue" hidden aria-label="Jalons à venir"></section>
+    <section class="equipe-vue" id="equipe-vue" hidden aria-label="Qui travaille sur quoi"></section>
+    <p class="hint" id="hors-slide"></p>
+    <details class="jalons">
+      <summary>Jalons communs <span class="muted" id="j-count"></span> <span class="muted">— salons, audits, arrêts de production : affichés sur le Gantt et le PPT</span></summary>
+      <ul id="j-list"></ul>
+      <form id="j-form" class="j-form">
+        <input type="date" id="j-date" required aria-label="Date du jalon">
+        <input id="j-label" required maxlength="60" placeholder="ex. Audit client" aria-label="Libellé du jalon">
+        <button class="btn">＋ Jalon</button>
+      </form>
+    </details>
+  </section>
+  <section id="view-prod" class="view" hidden>
+    <div class="prod-bar">
+      <p class="hint" id="prod-aide">Vue de l'équipe production : état de chaque banc, version installée (et version livrée à déployer), prochaine version. Clic sur une version : ce qu'elle apporte.</p>
+      <button class="btn" id="btn-csv" title="Télécharger ce tableau (Excel)">⬇ CSV</button>
+    </div>
+    <div class="prod-wrap" id="prod-table"></div>
+  </section>
+  <section id="view-projets" class="view" hidden>
+    <div class="p-bar">
+      <nav class="tabs" id="pole-tabs" aria-label="Pôles"></nav>
+      <input class="search" id="search" type="search" placeholder="Filtrer : projet, pôle ou personne…" aria-label="Filtrer les projets par nom, pôle ou personne">
+    </div>
+    <div id="cards"></div>
+  </section>
+</main>
+
+<!-- Éditeur de projet -->
+<div class="drawer-bg" id="drawer-bg" hidden></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="d-title">
+  <header class="d-head">
+    <h2 id="d-title">Projet</h2>
+    <span class="dirty" id="dirty" hidden>● non enregistré</span>
+    <button class="icon" id="d-close" aria-label="Fermer">✕</button>
+  </header>
+  <div class="d-body">
+    <div class="grid2">
+      <label>Nom<input id="f-nom" required></label>
+      <label>Pôle<select id="f-pole"></select></label>
+    </div>
+    <div class="champ">Équipe <span class="muted">(cliquer pour choisir ; annuaire dans ⚙ Paramètres)</span>
+      <div id="f-ressources"></div>
+    </div>
+    <label>Postes <span class="muted">(optionnel — si le banc tourne sur plusieurs postes, séparés par des virgules : un état par poste dans 📦 En production)</span>
+      <input id="f-postes" maxlength="900" placeholder="Poste A, Poste B">
+    </label>
+    <label>Dépôt Git <span class="muted">(optionnel — dossier local, ou lien https://… / git@… pour lire une branche à distance)</span>
+      <input id="f-depot" placeholder="~/workspace/nom_du_depot   ou   https://gitlab…/groupe/projet.git">
+    </label>
+    <div class="branche-row" id="branche-row" hidden>
+      <label>Branche<select id="f-branche"><option value="">branche par défaut du dépôt</option></select></label>
+      <button type="button" class="btn" id="b-branches" title="Lire la liste des branches du dépôt distant">↻ Charger les branches</button>
+      <button type="button" class="btn" id="b-ident" title="S'identifier auprès du serveur Git">🔑 Identifiants</button>
+    </div>
+    <div class="row-btns" id="depot-btns">
+      <button class="btn" id="b-import" title="Lire ROADMAP.md / CHANGELOG.md et les tags Git du dépôt">⤓ Importer du dépôt</button>
+      <button class="btn" id="b-exp-rel" title="Écrire ROADMAP.md (historique + à venir) dans le dépôt">⤒ ROADMAP.md → dépôt</button>
+      <button class="btn" id="b-exp-chg" title="Écrire CHANGELOG.md (versions livrées) dans le dépôt">⤒ CHANGELOG.md → dépôt</button>
+      <a class="btn ghost" id="b-dl-rel">Télécharger ROADMAP.md</a>
+      <a class="btn ghost" id="b-dl-chg">Télécharger CHANGELOG.md</a>
+    </div>
+    <div class="v-head">
+      <h3>Versions <span class="muted" id="v-count"></span></h3>
+      <button class="btn" id="b-add-v">＋ Version</button>
+    </div>
+    <div id="versions"></div>
+  </div>
+  <footer class="d-foot">
+    <button class="btn danger" id="b-del">Supprimer le projet</button>
+    <span class="spacer"></span>
+    <button class="btn" id="b-cancel">Annuler</button>
+    <button class="btn primary" id="b-save">Enregistrer</button>
+  </footer>
+</aside>
+
+<!-- détail d'une version (page publiée) -->
+<dialog class="detail" id="detail" aria-label="Détail de la version">
+  <div id="detail-body"></div>
+  <div class="detail-foot"><button class="btn" data-close>Fermer</button></div>
+</dialog>
+
+<!-- date de fin modifiée : retard réel ou erreur de saisie ? -->
+<dialog class="detail" id="decalage" aria-labelledby="dc-titre">
+  <form id="dc-form">
+    <h3 id="dc-titre">📅 Date de fin modifiée</h3>
+    <p class="muted">Pour chaque version : le planning a-t-il vraiment glissé, ou était-ce une erreur de saisie ?</p>
+    <div id="dc-liste"></div>
+    <div class="detail-foot"><button type="button" class="btn" id="dc-annuler">Annuler</button> <button class="btn primary">Enregistrer</button></div>
+  </form>
+</dialog>
+
+<!-- identification auprès du serveur Git (lien du dépôt) -->
+<dialog class="detail" id="ident" aria-labelledby="id-titre">
+  <form id="id-form" autocomplete="off">
+    <h3 id="id-titre">🔑 Identifiants Git</h3>
+    <p class="muted" id="id-hote"></p>
+    <div id="id-https">
+      <p class="muted">Enregistrés dans le gestionnaire d'identifiants de Git (pas dans l'application), puis testés.
+        Préférer un <b>jeton d'accès</b> en lecture au mot de passe (Bitbucket : Gérer le compte → Jetons d'accès HTTP).</p>
+      <label>Utilisateur<input id="id-user" required autocomplete="username"></label>
+      <label>Mot de passe ou jeton<input id="id-secret" type="password" required autocomplete="current-password"></label>
+    </div>
+    <div id="id-ssh" hidden>
+      <p class="muted">Lien git@… : l'accès se fait avec la clé SSH du poste. Copier cette clé dans le profil du serveur Git
+        (Bitbucket : Gérer le compte → Clés SSH), puis ↻ Charger les branches.</p>
+      <textarea id="id-cle" readonly rows="3" aria-label="Clé SSH publique du poste"></textarea>
+    </div>
+    <p class="ver-warn" id="id-msg" role="status" hidden></p>
+    <div class="detail-foot">
+      <button type="button" class="btn" id="id-close">Fermer</button>
+      <button type="button" class="btn" id="id-copier" hidden>Copier la clé</button>
+      <button class="btn primary" id="id-ok">Enregistrer et tester</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- paramètres (fichier de configuration de l'utilisateur) -->
+<dialog class="detail params" id="params" aria-labelledby="pr-titre">
+  <form id="pr-form">
+    <h3 id="pr-titre">⚙ Paramètres</h3>
+    <p class="muted">Enregistrés dans <code id="pr-chemin"></code></p>
+    <fieldset><legend>Application</legend>
+      <label>Titre<input name="application.titre" required maxlength="80"></label>
+      <div class="grid2">
+        <label>Titre court (PPT)<input name="application.titre_court" required maxlength="40"></label>
+        <label>Thème<select name="application.theme"><option value="sombre">Sombre</option><option value="clair">Clair</option></select></label>
+      </div>
+      <label class="check"><input type="checkbox" name="application.qui_travaille"> Afficher « 👥 Qui travaille sur quoi » sous le Gantt (application et page publiée)</label>
+      <label>Port <span class="muted">(pris en compte au prochain lancement)</span><input name="application.port" type="number" min="1024" max="65535" required></label>
+    </fieldset>
+    <fieldset><legend>Publication</legend>
+      <label>Serveur <span class="muted">(vide = « ⇪ Publier » télécharge le fichier)</span><input name="publication.serveur" placeholder="utilisateur@serveur:/var/www/roadmap/index.html"></label>
+      <label>Lien donné aux collègues<input name="publication.lien" placeholder="http://nom-du-serveur.local/"></label>
+      <label class="check"><input type="checkbox" name="publication.terminees"> Montrer aussi les versions terminées sur la période publiée</label>
+      <div><button type="button" class="btn" id="pr-test">Tester la connexion</button></div>
+    </fieldset>
+    <fieldset><legend>PowerPoint</legend>
+      <div class="grid2">
+        <label>Auteur (pied de page)<input name="ppt.auteur" maxlength="60"></label>
+        <label>Mention<input name="ppt.mention" maxlength="60"></label>
+      </div>
+    </fieldset>
+    <fieldset><legend>Couleurs</legend>
+      <div class="pr-couleurs">
+        <label>Aujourd'hui<input type="color" name="couleurs.aujourdhui"></label>
+        <label>Jalons<input type="color" name="couleurs.jalon"></label>
+        <label>En retard<input type="color" name="couleurs.retard"></label>
+      </div>
+    </fieldset>
+    <fieldset><legend>Équipe <span class="muted">(une personne par ligne : choisies en un clic dans les fiches)</span></legend>
+      <textarea id="pr-equipe" rows="5" placeholder="A. Dupont&#10;B. Durand" aria-label="Annuaire de l'équipe, une personne par ligne"></textarea>
+    </fieldset>
+    <fieldset><legend>Pôles <span class="muted">(nom · abréviation · couleur)</span></legend>
+      <div id="pr-poles"></div>
+      <div><button type="button" class="btn" id="pr-add-pole">＋ Pôle</button></div>
+    </fieldset>
+    <p class="ver-warn" id="pr-msg" role="status" hidden></p>
+    <div class="detail-foot"><button type="button" class="btn" id="pr-close">Annuler</button> <button class="btn primary">Enregistrer</button></div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/app.js"></script>
+</body>
+</html>

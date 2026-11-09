@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.tmp
+# données si ROADMAP_DATA n'est pas défini (lancer.sh et la version installée : ~/.local/share/roadmap-bancs)
+data/
+# paquets .deb construits par construire-deb.sh
+build/

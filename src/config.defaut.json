@@ -1,0 +1,33 @@
+{
+  "application": {
+    "titre": "Roadmap Outils & Bancs de Test",
+    "titre_court": "Roadmap Outils",
+    "theme": "sombre",
+    "qui_travaille": false,
+    "port": 8765
+  },
+  "poles": [
+    {"nom": "Bancs de développement", "court": "Dev",    "couleur": "#595959"},
+    {"nom": "Outils de test",         "court": "Outils", "couleur": "#f39200"},
+    {"nom": "Bancs SAV",              "court": "SAV",    "couleur": "#7030a0"},
+    {"nom": "Bancs de production",    "court": "Prod",   "couleur": "#da1f3d"},
+    {"nom": "Library",                "court": "LIB",    "couleur": "#00a4c8"},
+    {"nom": "Validation",             "court": "Valid.", "couleur": "#36b923"}
+  ],
+  "equipe": [],
+  "couleurs": {
+    "aujourdhui": "#da1f3d",
+    "jalon": "#1f4e79",
+    "retard": "#dc2626",
+    "supplementaires": ["#1f4e79", "#a5a5a5", "#8b5e34"]
+  },
+  "publication": {
+    "serveur": "",
+    "lien": "",
+    "terminees": true
+  },
+  "ppt": {
+    "auteur": "",
+    "mention": "Usage interne"
+  }
+}

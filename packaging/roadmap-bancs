@@ -1,0 +1,4 @@
+#!/bin/sh
+# Lanceur installé dans /usr/bin : données de l'utilisateur dans ~/.local/share/roadmap-bancs
+export ROADMAP_DATA="${ROADMAP_DATA:-${XDG_DATA_HOME:-$HOME/.local/share}/roadmap-bancs}"
+exec python3 /usr/lib/roadmap-bancs/main.py "$@"

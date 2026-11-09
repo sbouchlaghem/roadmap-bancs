@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Roadmap Outils & Bancs
+Comment=Suivi des versions des outils et bancs de test
+Exec=roadmap-bancs
+Icon=x-office-calendar
+Terminal=false
+Categories=Office;
