@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 ### Added
+- Période du Gantt (Du / au) : bouton 📅 calendrier des mois (Chrome / Edge)
 - Paquet .deb : la mise à jour arrête l'instance déjà lancée (elle gardait l'ancien code : nouveaux champs ignorés sans message, ex. Postes)
+- Période du Gantt : mois affichés en français (« septembre 2026 ») quelle que soit la langue du navigateur
+- Légende : échantillons de statut dessinés comme les barres du Gantt (couleur du pôle, foncée ou vive)
+- Filtres du Gantt par pôle et par statut (dont « ⚠ Bloqué ou en retard »), repris par l'export PPT et draw.io
+- Versions sans dates : pastilles cliquables (ouvrent la fiche) dans un bloc repliable, au lieu d'une longue phrase
+- Petit écran : colonne des noms plus étroite, pôles et noms restent visibles quand on fait défiler le Gantt
+- Le trait « Aujourd'hui » passe sous le numéro des versions au lieu de le barrer
 - Windows : lanceur `lancer.bat` (données dans %APPDATA%\roadmap-bancs)
 - **Postes** : un banc qui tourne sur plusieurs postes (fiche projet → Postes) a un état par poste dans 📦 En production, la page publiée et le CSV ; la carte du projet montre l'état le plus grave. Sans poste : rien ne change
 - Les enregistrements passent un par un : deux modifications rapprochées ne s'écrasent plus

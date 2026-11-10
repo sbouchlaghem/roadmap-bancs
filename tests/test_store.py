@@ -285,6 +285,15 @@ class TestStore(unittest.TestCase):
         parc = {x["nom"]: x for x in snapshot(server.publier("2026-09", "2027-01"))["parc"]}
         self.assertEqual(parc["Banc 2 postes"]["postes"][0]["etat"], "panne")  # publié
 
+class TestFiltres(unittest.TestCase):
+    def test_garde(self):
+        p = {"pole": "Library"}
+        bloque, cours = {"statut": "Bloqué"}, {"statut": "En cours"}
+        self.assertTrue(server.garde(p, cours))
+        self.assertFalse(server.garde(p, cours, pole="Validation"))
+        self.assertTrue(server.garde(p, bloque, "Library", "alerte"))
+        self.assertFalse(server.garde(p, cours, statut="alerte"))
+        self.assertTrue(server.garde(p, cours, statut="En cours"))
 
 if __name__ == "__main__":
     unittest.main()

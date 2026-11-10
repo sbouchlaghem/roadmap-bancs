@@ -21,8 +21,8 @@
     <button role="tab" data-view="prod" aria-selected="false">📦 En production</button>
   </nav>
   <div class="actions">
-    <label class="period">Du <input type="month" id="debut"></label>
-    <label class="period">au <input type="month" id="fin"></label>
+    <label class="period">Du <select id="debut"></select><button type="button" class="icon" data-calm title="Choisir dans le calendrier" aria-label="Calendrier">📅</button><input type="month" class="cal-in" tabindex="-1" aria-hidden="true"></label>
+    <label class="period">au <select id="fin"></select><button type="button" class="icon" data-calm title="Choisir dans le calendrier" aria-label="Calendrier">📅</button><input type="month" class="cal-in" tabindex="-1" aria-hidden="true"></label>
     <a class="btn" id="btn-pub" href="/api/publier" title="Publie le Gantt de cette période (versions à venir seulement) en lecture seule">⇪ Publier</a>
     <button class="btn" id="btn-ppt" title="Générer la roadmap PowerPoint sur cette période">⬇ Export PPT</button>
     <button class="btn" id="btn-drawio" title="Roadmap de cette période en fichier draw.io (modifiable)">⬇ draw.io</button>
@@ -34,11 +34,18 @@
 <main>
   <section id="view-roadmap" class="view">
     <div class="alerts" id="alerts" role="status" hidden></div>
-    <div class="legend" id="legend"></div>
+    <div class="g-bar">
+      <select id="g-pole" aria-label="Filtrer le Gantt par pôle"><option value="">Tous les pôles</option></select>
+      <select id="g-statut" aria-label="Filtrer le Gantt par statut">
+        <option value="">Tous les statuts</option><option value="alerte">⚠ Bloqué ou en retard</option>
+        <option>En cours</option><option>Planifié</option><option>Bloqué</option><option>En retard</option><option>Terminé</option>
+      </select>
+      <div class="legend" id="legend"></div>
+    </div>
     <div class="gantt-wrap"><div class="gantt" id="gantt"></div></div>
     <section class="equipe-vue" id="jalons-vue" hidden aria-label="Jalons à venir"></section>
     <section class="equipe-vue" id="equipe-vue" hidden aria-label="Qui travaille sur quoi"></section>
-    <p class="hint" id="hors-slide"></p>
+    <details class="jalons" id="hors-slide" hidden><summary></summary><div class="eq-items"></div></details>
     <details class="jalons">
       <summary>Jalons communs <span class="muted" id="j-count"></span> <span class="muted">— salons, audits, arrêts de production : affichés sur le Gantt et le PPT</span></summary>
       <ul id="j-list"></ul>

@@ -108,6 +108,17 @@ async function api(method, url, body) {
 const store = { get(k, d) { try { return localStorage.getItem(k) || d; } catch (_) { return d; } },
                 set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* stockage indisponible */ } } };
 
+const isoMois = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+function remplirMois(extra) {   // « septembre 2026 » quelle que soit la langue du navigateur (input type=month ne le permet pas)
+  const t = toDate(S.today);
+  let a = new Date(t.getFullYear() - 3, t.getMonth(), 1), b = new Date(t.getFullYear() + 3, t.getMonth(), 1);
+  for (const d of extra.map(k => toDate(k)).filter(Boolean)) { if (d < a) a = d; if (d > b) b = d; }
+  const opts = [];
+  for (let m = new Date(a.getFullYear(), a.getMonth(), 1); m <= b; m = new Date(m.getFullYear(), m.getMonth() + 1, 1))
+    opts.push(`<option value="${isoMois(m)}">${m.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</option>`);
+  $("#debut").innerHTML = $("#fin").innerHTML = opts.join("");
+}
+
 // ---------- chargement ----------
 async function load() {
   const d = RO ? window.SNAPSHOT : await (await api("GET", "/api/projets")).json();
@@ -121,12 +132,19 @@ async function load() {
   const souci = S.parc.flatMap(postesDe).filter(p => ["panne", "degrade", "maj"].includes(p.etat)).length;   // production.html : l'essentiel pour la prod
   $("#resume").textContent = VUE_PROD ? `${S.parc.length} bancs / outils${souci ? ` · ${souci} indisponible(s) ou dégradé(s)` : ""} · publié le ${d.publie}`
     : RO ? `${nav} versions à venir · publié le ${d.publie}` : `${S.projets.length} projets · ${nv} versions`;
-  if (RO) [$("#debut").value, $("#fin").value] = d.periode;   // période choisie à la publication
-  else if (!$("#debut").value) {
-    const mois = n => { const d = toDate(S.today); d.setMonth(d.getMonth() + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
-    $("#debut").value = store.get("debut", mois(-2));   // par défaut : 2 mois avant -> 4 mois après aujourd'hui
-    $("#fin").value = store.get("fin", mois(4));
+  if (!$("#debut").length) {   // premier chargement : liste des mois, puis période
+    const mois = n => { const d = toDate(S.today); d.setMonth(d.getMonth() + n, 1); return isoMois(d); };
+    // par défaut : 2 mois avant -> 4 mois après aujourd'hui ; page publiée : période choisie à la publication
+    const [deb, fin] = RO ? d.periode : [store.get("debut", mois(-2)), store.get("fin", mois(4))];
+    remplirMois([deb, fin]);
+    $("#debut").value = deb; $("#fin").value = fin;
+    if ($("#debut").selectedIndex < 0) $("#debut").value = mois(-2);   // valeur mémorisée illisible
+    if ($("#fin").selectedIndex < 0) $("#fin").value = mois(4);
   }
+  const gp = $("#g-pole");
+  gp.length = 1;
+  for (const [pole] of grouped(S.projets)) gp.add(new Option(pole, pole));
+  for (const id of ["g-pole", "g-statut"]) { const el = $("#" + id); el.value = store.get(id, ""); if (el.selectedIndex < 0) el.value = ""; }
   render();
 }
 function render() { renderAlerts(); renderGantt(); renderCards(); renderJalons(); renderProd(); }
@@ -149,7 +167,7 @@ function renderGantt() {
   const g = $("#gantt");
   if (!t0 || !t1 || t1 < t0) { g.innerHTML = `<p class="empty">Choisis une période valide.</p>`; return; }
   const span = (t1 - t0) / 864e5 + 1;
-  const trackPx = Math.max(g.clientWidth, 900) - 264;
+  const trackPx = g.clientWidth - 34 - (parseFloat(getComputedStyle(g).getPropertyValue("--nom")) || 230);
   const vus = { poles: new Set(), statuts: new Set(), prevu: false };   // pour une légende limitée à ce qui est affiché   // largeur des pistes (colonnes pôle 34 px + nom 230 px)
   const pct = d => Math.min(100, Math.max(0, ((d - t0) / 864e5) / span * 100));
   const today = toDate(S.today);
@@ -163,13 +181,13 @@ function renderGantt() {
   const todayLine = today >= t0 && today <= t1 ? `<div class="today" style="left:${pct(today)}%" data-label="Aujourd'hui"></div>` : "";
   let html = `<div class="g-head"><div></div><div></div><div class="g-months">${months}</div></div>`;
   const horsSlide = [];
-  for (const [pole, list] of grouped(S.projets)) {
+  for (const [pole, list] of grouped(visibles())) {
     let rows = "";
     for (const p of list) {
       const bars = [];
       for (const v of p.versions) {
         const a = toDate(v.debut), b = toDate(v.fin, true);
-        if (!a || !b) { if (v.statut && v.statut !== "Terminé") horsSlide.push(`${p.nom} ${v.version}`); continue; }
+        if (!a || !b) { if (v.statut && v.statut !== "Terminé") horsSlide.push({ p, v }); continue; }
         if (b < t0 || a > t1) continue;
         const l = pct(a), w = Math.max(pct(b) - l, 0.6), der = derive(v);
         const txt = (["Bloqué", "En retard"].includes(v.statut) ? "⚠ " : "") + v.version + fmtDer(der);
@@ -202,7 +220,7 @@ function renderGantt() {
             ? `<div class="prod-mark" style="left:${pct(pr)}%" title="${esc(p.nom)} ${esc(v.version)} : en production depuis le ${fmtD(v.prod)}">▲</div>` : "";
           vus.statuts.add(v.statut); if (ghost) vus.prevu = true; if (prod) vus.prod = true;
           return `${ghost}${prod}<div class="bar ${stc(v.statut)}" style="left:${l}%;width:${w}%;--c:${c}" title="${esc(tip)}"
-                    data-id="${p.id}" data-v="${esc(v.version)}">${esc(txt)}</div>`;
+                    data-id="${p.id}" data-v="${esc(v.version)}"><span>${esc(txt)}</span></div>`;
         }).join("");
         rows += `<div class="g-row"><div class="g-name" data-id="${p.id}" title="${esc(p.nom + (equipe(p) ? "\nÉquipe : " + equipe(p) : ""))}">${i ? "" : esc(p.nom)}</div>
                  <div class="g-track">${grid}${items}</div></div>`;
@@ -211,7 +229,7 @@ function renderGantt() {
     if (rows) vus.poles.add(pole);
     if (rows) html += `<div class="g-group"><div class="g-pole" style="background:${color(pole)}">${esc(court(pole))}</div><div>${rows}</div></div>`;
   }
-  g.innerHTML = html.includes("g-group") ? html : html + `<p class="empty">Aucune version datée sur cette période.</p>`;
+  g.innerHTML = html.includes("g-group") ? html : html + `<p class="empty">Aucune version datée sur cette période${filtres().pole || filtres().statut ? " pour ces filtres" : ""}.</p>`;
   const tr = g.querySelector(".g-months");
   if (tr) {   // lignes « aujourd'hui » et jalons au-dessus des pistes
     const box = tr.getBoundingClientRect(), gb = g.getBoundingClientRect(), x = d => box.left - gb.left + box.width * pct(d) / 100;
@@ -230,9 +248,15 @@ function renderGantt() {
   }
   renderEquipe(t0, t1);
   renderJalonsVue(t0);
-  $("#hors-slide").textContent = horsSlide.length ? `Sans dates (non affichées) : ${horsSlide.join(", ")}` : "";
-  const STYLES = { "Terminé": "background:#999;opacity:.5", "En cours": "background:#999", "Planifié": "border:2px dashed #999",
-                   "Bloqué": "background:#999;border:2px solid #111", "En retard": "background:#999;border:2px solid var(--c-retard)" };
+  const hs = $("#hors-slide");   // versions sans dates : pastilles cliquables (ouvrent la fiche pour les dater)
+  hs.hidden = !horsSlide.length;
+  hs.querySelector("summary").innerHTML = `Sans dates <span class="muted">(${horsSlide.length}) — non affichées sur le Gantt, clic pour les dater</span>`;
+  hs.querySelector("div").innerHTML = horsSlide.map(({ p, v }) => `<button class="chip ${stc(v.statut)}" style="--c:${color(p.pole)}"
+    data-id="${p.id}" data-v="${esc(v.version)}">${esc(p.nom)} <b>${esc(v.version)}</b></button>`).join("");
+  const STYLES = { "Terminé": "background:color-mix(in srgb,var(--c) 40%,var(--panel))", "En cours": "background:var(--c)",   // comme .bar.st-*
+                   "Planifié": "background:color-mix(in srgb,var(--c) 8%,var(--panel));border:2px dashed var(--c)",
+                   "Bloqué": "background:var(--c);border:2px solid var(--text)", "En retard": "background:var(--c);border:2px solid var(--c-retard)" };
+  $("#legend").style.setProperty("--c", vus.poles.size ? color([...vus.poles][0]) : "var(--muted)");
   $("#legend").innerHTML = [...vus.poles].map(p => `<span><i style="background:${color(p)}"></i>${esc(p)}</span>`).join("") +
     Object.keys(STYLES).filter(s => vus.statuts.has(s)).map(s => `<span><i style="${STYLES[s]}"></i>${s}</span>`).join("") +
     (vus.prevu ? `<span><i style="width:0;border-left:2px solid var(--text)"></i>Fin prévue initialement</span>` : "") +
@@ -487,7 +511,7 @@ function exportDrawio() {
   let y = TOP;
   const STY = { "Terminé": "opacity=45;strokeColor=none;", "Planifié": "fillColor=#ffffff;dashed=1;strokeWidth=2;",
                 "Bloqué": "strokeColor=#000000;strokeWidth=2;", "En retard": `strokeColor=${S.config.couleurs.retard};strokeWidth=3;` };
-  for (const [pole, list] of grouped(S.projets)) {
+  for (const [pole, list] of grouped(visibles())) {
     const y0 = y, c = color(pole);
     for (const p of list) {
       const bars = p.versions.map(v => ({ v, a: toDate(v.debut), b: toDate(v.fin, true) }))
@@ -753,8 +777,23 @@ document.querySelectorAll(".top .tabs button").forEach(b => b.addEventListener("
   for (const v of ["roadmap", "projets", "prod"]) $("#view-" + v).hidden = b.dataset.view !== v;
   store.set("vue", b.dataset.view);
 }));
-["debut", "fin"].forEach(id => $("#" + id).addEventListener("change", e => { store.set(id, e.target.value); renderGantt(); }));
+["debut", "fin", "g-pole", "g-statut"].forEach(id => $("#" + id).addEventListener("change", e => { store.set(id, e.target.value); renderGantt(); }));
 window.addEventListener("resize", () => renderGantt());
+// période : 📅 ouvre un calendrier des mois (navigateurs qui savent afficher input type=month ; sinon bouton masqué)
+document.querySelectorAll("[data-calm]").forEach(b => {
+  const sel = b.previousElementSibling, cal = b.nextElementSibling;
+  if (cal.type !== "month") { b.hidden = true; return; }
+  b.addEventListener("click", e => { e.preventDefault(); cal.value = sel.value; try { cal.showPicker(); } catch (_) { cal.focus(); } });
+  cal.addEventListener("change", () => {
+    if (!cal.value) return;
+    if (![...sel.options].some(o => o.value === cal.value)) {   // mois hors de la liste : on l'élargit
+      const [d, f] = [$("#debut").value, $("#fin").value];
+      remplirMois([d, f, cal.value]); $("#debut").value = d; $("#fin").value = f;
+    }
+    sel.value = cal.value;
+    sel.dispatchEvent(new Event("change"));   // même chemin que la liste : mémorisé, Gantt redessiné
+  });
+});
 $("#search").addEventListener("input", renderCards);
 $("#pole-tabs").addEventListener("click", e => {
   const b = e.target.closest("button[data-pole]");
@@ -867,7 +906,7 @@ $("#btn-pub").addEventListener("click", e => {
 $("#btn-ppt").addEventListener("click", e => busy(e.target, async () => {
   try {
     toast("Génération du PowerPoint…");
-    const r = await api("POST", "/api/export/ppt", { debut: $("#debut").value, fin: $("#fin").value });
+    const r = await api("POST", "/api/export/ppt", { debut: $("#debut").value, fin: $("#fin").value, ...filtres() });
     const blob = await r.blob();
     const name = decodeURIComponent((r.headers.get("Content-Disposition") || "").split("''")[1] || "roadmap.pptx");
     const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: name });

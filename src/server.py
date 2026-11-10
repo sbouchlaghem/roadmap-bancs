@@ -30,8 +30,16 @@ def check_periode(debut, fin):
             raise store.Invalid("Période : mois attendus au format AAAA-MM")
 
 
-def ppt_export(debut, fin):
-    """Génère le PPT avec build_roadmap.py (entrée CSV). debut/fin : AAAA-MM. Renvoie le chemin du fichier."""
+def garde(p, v, pole="", statut=""):
+    """Filtres du Gantt (même règle que visibles() dans app.js) : pôle, statut ou « alerte » = Bloqué ou En retard."""
+    if pole and p["pole"] != pole:
+        return False
+    return not statut or (v["statut"] in ("Bloqué", "En retard") if statut == "alerte" else v["statut"] == statut)
+
+
+def ppt_export(debut, fin, pole="", statut=""):
+    """Génère le PPT avec build_roadmap.py (entrée CSV). debut/fin : AAAA-MM ; pole/statut : filtres du Gantt.
+    Renvoie le chemin du fichier."""
     check_periode(debut, fin)
     to_fr = lambda d: "/".join(reversed(d.split("-")))  # 2026-09-15 -> 15/09/2026, 2027-01 -> 01/2027
     os.makedirs(EXPORTS, exist_ok=True)
@@ -40,7 +48,7 @@ def ppt_export(debut, fin):
         w = csv.writer(f, delimiter=";")
         w.writerow(["categorie", "nom", "version", "debut", "fin", "statut", "prevu"])
         for p in store.load_all():
-            for v in p["versions"]:
+            for v in (v for v in p["versions"] if garde(p, v, pole, statut)):
                 w.writerow([p["pole"], p["nom"], v["version"]] + [to_fr(v[k]) if v.get(k) else "" for k in ("debut", "fin")]
                            + [v["statut"], to_fr(v["prevu"]) if v.get("prevu") else ""])
         tmp_csv = f.name
@@ -206,7 +214,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._download(out, os.path.basename(out), "text/html; charset=utf-8")
             if method == "POST" and path == "/api/export/ppt":
                 d = self._json()
-                out, log = ppt_export(d.get("debut"), d.get("fin"))
+                out, log = ppt_export(d.get("debut"), d.get("fin"), d.get("pole") or "", d.get("statut") or "")
                 return self._download(out, os.path.basename(out),
                                       "application/vnd.openxmlformats-officedocument.presentationml.presentation")
             if m:
