@@ -266,8 +266,10 @@ input[type="color"] { padding: 2px; height: 32px; min-width: 48px; }
 table.prod { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.prod th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 table.prod td { padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-table.prod tbody tr:nth-child(even) { background: var(--soft); }
-table.prod tbody tr:last-child td { border-bottom: 0; }
+table.prod tbody:nth-of-type(even) { background: var(--soft); }   /* un tbody par projet : ses postes gardent la même couleur */
+table.prod tbody tr:not(:last-child) td:not([rowspan]) { border-bottom-style: dashed; }   /* entre deux postes */
+table.prod tbody:last-child tr:last-child td, table.prod tbody:last-child td[rowspan] { border-bottom: 0; }
+table.prod td.poste-cell { font-weight: 600; }
 .pt { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
 .ro table.prod .link { cursor: pointer; }
 
@@ -276,7 +278,7 @@ table.prod tbody tr:last-child td { border-bottom: 0; }
 .etat-ok { color: #16a34a; } .etat-maj { color: #2563eb; } .etat-degrade { color: #d97706; } .etat-panne { color: #dc2626; }
 [data-theme="sombre"] .etat-ok { color: #4ade80; } [data-theme="sombre"] .etat-maj { color: #60a5fa; } [data-theme="sombre"] .etat-degrade { color: #fbbf24; } [data-theme="sombre"] .etat-panne { color: #f87171; }
 .d-body label.check { flex-direction: row; align-items: center; gap: 8px; font-weight: 500; }
-tr.non-publie td:not(:first-child) { opacity: .45; }
+.non-publie td:not(:has(.pp)) { opacity: .45; }
 table.prod td:has(.pp) { width: 1%; text-align: center; }
 table.prod td.etat-cell { white-space: normal; min-width: 150px; max-width: 260px; }
 
@@ -287,8 +289,6 @@ table.prod td.etat-cell { white-space: normal; min-width: 150px; max-width: 260p
 table.prod td.etat-cell { min-width: 230px; }
 .a-deployer { margin-top: 4px; }
 .prod-bar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.prod-bar .hint { margin: 0; }
+.prod-bar .hint { margin: 0; margin-right: auto; }
 .ro-prod .top .tabs { display: none !important; }   /* production.html : pas de roadmap */
 .vlink { text-decoration: none; } .vlink b { text-decoration: underline dotted; }
-.poste + .poste { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--line); }
-.poste-nom { display: block; font-size: .85em; margin-bottom: 2px; }

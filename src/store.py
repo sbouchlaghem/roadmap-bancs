@@ -254,7 +254,7 @@ def _etat(src, ancien, nom):
 
 
 def _postes(val, anciens, maxi=20):
-    """Postes qui font tourner le banc (vide = le projet est un seul banc) : nom + état propre à chacun."""
+    """Postes qui font tourner le banc (vide = le projet est un seul banc) : nom, état et version installée propres à chacun."""
     if not isinstance(val, list):
         raise Invalid("Postes : liste attendue")
     old = {a["nom"].lower(): a for a in anciens}
@@ -266,7 +266,13 @@ def _postes(val, anciens, maxi=20):
             continue
         if nom.lower() in (o["nom"].lower() for o in out):
             raise Invalid(f"Poste en double : {nom}")
-        out.append({"nom": nom, **_etat(x, old.get(nom.lower(), {}), f"Poste {nom}")})
+        ancien = old.get(nom.lower(), {})
+        # version installée sur ce poste (deux postes peuvent tourner sur des versions différentes) ; absente = inchangée
+        version = _texte(x.get("version", ancien.get("version", "")), f"Poste {nom} : version", 40, True)
+        vdate = str(x.get("version_date", ancien.get("version_date", "")) or "").strip() if version else ""
+        if vdate and len(R.norm_date(vdate)) != 10:
+            raise Invalid(f"Poste {nom} : date de mise en production AAAA-MM-JJ")
+        out.append({"nom": nom, **_etat(x, ancien, f"Poste {nom}"), "version": version, "version_date": vdate})
     if len(out) > maxi:
         raise Invalid(f"Postes : {maxi} maximum")
     return out

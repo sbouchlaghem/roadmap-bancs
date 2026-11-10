@@ -132,8 +132,9 @@ Un clic sur l'icône démarre le serveur et ouvre le navigateur ; un 2e clic rou
   (✅ Opérationnel / 🔧 En mise à jour → version visée / ⚠ Dégradé / ⛔ En panne, commentaire, « depuis le » au choix),
   **version installée** et sa date (installer une nouvelle version sur un banc en mise à jour le repasse ✅ Opérationnel),
   case **Publié** (afficher ou non sur la page publiée).
-  **Postes** : si le banc tourne sur plusieurs postes (fiche projet → Postes, séparés par des virgules), chaque poste a son état ;
-  la version en production reste commune au projet. Installer une nouvelle version repasse ✅ tous les postes en mise à jour. Sous la version installée : « ⚠ vX à déployer » si une version plus
+  **Postes** : si le banc tourne sur plusieurs postes (fiche projet → Postes, séparés par des virgules), chaque poste a son état
+  et sa version en production (deux postes peuvent tourner sur des versions différentes). Installer une nouvelle version sur un poste
+  en mise à jour le repasse ✅. Sous la version installée : « ⚠ vX à déployer » si une version plus
   récente est livrée. Et la prochaine version. « Terminé » = livrée (tag, CHANGELOG), pas forcément en production.
   Dates proposées (modifiables) : mise en production = date de livraison (« Terminé ») de la version,
   opérationnel depuis = date de mise en production. **⬇ CSV** : le tableau pour Excel (aussi sur la page publiée).

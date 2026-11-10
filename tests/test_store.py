@@ -282,12 +282,21 @@ class TestStore(unittest.TestCase):
         p = store.save({**p, "postes": [{"nom": "poste b", "etat": "panne"}]}, p["id"])
         self.assertEqual(p["postes"][0]["etat_note"], "")  # retrouvé par nom (casse ignorée), même état : date gardée
         self.assertEqual(p["postes"][0]["etat_date"], date.today().isoformat())
+        p = store.save({**p, "postes": [{"nom": "Poste A", "version": "v1.0.0", "version_date": "2026-10-01"},
+                                        {"nom": "Poste B", "version": "v1.1.0", "version_date": "2026-11-02"}]}, p["id"])
+        self.assertEqual([(x["version"], x["version_date"]) for x in p["postes"]],
+                         [("v1.0.0", "2026-10-01"), ("v1.1.0", "2026-11-02")])  # une version par poste
+        p = store.save({**p, "postes": ["Poste A", "Poste B"]}, p["id"])  # fiche projet : noms seuls, versions gardées
+        self.assertEqual(p["postes"][1]["version"], "v1.1.0")
+        with self.assertRaises(store.Invalid):
+            store.save({**p, "postes": [{"nom": "A", "version": "v1", "version_date": "demain"}]}, p["id"])
         self.assertEqual(store.save({"nom": "Banc seul"})["postes"], [])  # sans poste : comme avant
         for bad in (["A", "a"], [{"nom": "A", "etat": "cassé"}], "A, B", ["x" * 41]):
             with self.assertRaises(store.Invalid, msg=bad):
                 store.save({**p, "postes": bad}, p["id"])
         parc = {x["nom"]: x for x in snapshot(server.publier("2026-09", "2027-01"))["parc"]}
-        self.assertEqual(parc["Banc 2 postes"]["postes"][0]["etat"], "panne")  # publié
+        self.assertEqual([x["version"] for x in parc["Banc 2 postes"]["postes"]], ["v1.0.0", "v1.1.0"])  # publié
+
 
 class TestFiltres(unittest.TestCase):
     def test_garde(self):

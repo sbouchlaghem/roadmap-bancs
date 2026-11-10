@@ -26,15 +26,19 @@ const court = pole => poleCfg(pole)?.court || pole;
 const liste = r => Array.isArray(r) ? r : String(r || "").split(",").map(s => s.trim()).filter(Boolean);
 const equipeV = (p, v) => liste(v.ressources).length ? liste(v.ressources) : liste(p.ressources);   // version, sinon projet
 const ETATS = { ok: ["✅", "Opérationnel"], maj: ["🔧", "En mise à jour"], degrade: ["⚠", "Dégradé"], panne: ["⛔", "En panne"] };
-// postes d'un banc (fiche projet) : chacun son état ; sans poste, le projet est le banc
+// postes d'un banc (fiche projet) : chacun son état et sa version installée ; sans poste, le projet est le banc
 const postesDe = p => p.postes?.length
-  ? p.postes.map((x, i) => ({ ...p, etat: x.etat, etat_note: x.etat_note, etat_date: x.etat_date, poste: x.nom, i })) : [p];
+  ? p.postes.map((x, i) => ({ ...p, etat: x.etat, etat_note: x.etat_note, etat_date: x.etat_date, poste: x.nom, i,
+                              version: x.version || "", version_date: x.version_date || "" })) : [{ ...p, i: 0 }];
 const GRAVITE = ["panne", "degrade", "maj", "ok"];
 const pire = p => postesDe(p).map(b => b.etat).filter(e => ETATS[e]).sort((a, b) => GRAVITE.indexOf(a) - GRAVITE.indexOf(b))[0] || "";
 function infoProd(p) {   // version en production, dernière livrée, à déployer, prochaine : base de la vue production
+  // p : un projet, ou un poste (postesDe) qui a sa propre version installée
   const cle = v => vkey(v.version) || [];
   const livrees = p.versions.filter(v => v.statut === "Terminé" && vkey(v.version)).sort((a, b) => cmp(cle(b), cle(a)));
-  const enProd = p.versions.filter(v => v.prod).sort((a, b) => b.prod.localeCompare(a.prod))[0];
+  const vp = p.poste !== undefined && p.versions.find(v => v.version === p.version);
+  const enProd = p.poste !== undefined ? vp && { ...vp, prod: p.version_date || vp.prod }
+    : p.versions.filter(v => v.prod).sort((a, b) => b.prod.localeCompare(a.prod))[0];
   const derniere = livrees[0], suivante = prochaine(p);
   // « à déployer » seulement si on sait ce qui tourne (une mise en prod saisie) : sinon pas de fausse alerte
   const aDeployer = derniere && enProd && cmp(cle(derniere), cle(enProd)) > 0;
@@ -42,8 +46,7 @@ function infoProd(p) {   // version en production, dernière livrée, à déploy
 }
 const etatHtml = p => {   // durée seulement pour un problème (dégradé, en panne) ; la date reste au survol
   if (!ETATS[p.etat]) return '<span class="muted">—</span>';
-  const jours = p.etat_date ? Math.round((toDate(S.today) - toDate(p.etat_date)) / 864e5) : null;
-  const duree = p.etat !== "ok" && jours !== null ? ` · ${jours > 0 ? jours + " j" : "aujourd'hui"}` : "";
+  const duree = p.etat !== "ok" && p.etat_date ? ` · depuis le ${fmtD(p.etat_date)}` : "";   // date du passage en mise à jour, panne…
   const cible = p.etat === "maj" && infoProd(p).cibleMaj ? ` → ${esc(infoProd(p).cibleMaj.version)}` : "";   // relié à la version visée
   return `<span class="etat etat-${p.etat}" title="${p.etat_date ? "depuis le " + fmtD(p.etat_date) : ""}">${ETATS[p.etat].join(" ")}${cible}${duree}</span>` +
     (p.etat_note ? ` <span class="muted">${esc(p.etat_note)}</span>` : "");
@@ -148,13 +151,35 @@ async function load() {
   render();
 }
 function render() { renderAlerts(); renderGantt(); renderCards(); renderJalons(); renderProd(); }
+// versions livrées pas encore installées, regroupées par version (seulement là où la version en production est connue)
+function aDeployerListe() {
+  return S.projets.filter(p => p.prod_publie !== false).flatMap(p => {
+    const par = {};
+    for (const b of postesDe(p)) {
+      const { aDeployer, derniere } = infoProd(b);
+      if (aDeployer) (par[derniere.version] ||= { p, v: derniere, postes: [] }).postes.push(b.poste);
+    }
+    return Object.values(par);
+  });
+}
 function renderAlerts() {
   const list = S.projets.flatMap(p => alertes(p).map(([v, a]) => ({ p, v, a })));
+  const dep = aDeployerListe(), n = list.length + dep.length;
   const box = $("#alerts");
-  box.hidden = !list.length;
-  box.innerHTML = `<strong>⚠ ${list.length} alerte${list.length > 1 ? "s" : ""}</strong><ul>` +
+  box.hidden = !n;
+  const depuis = d => { const j = Math.round((toDate(S.today) - toDate(d)) / 864e5); return j > 0 ? ` (il y a ${j} j)` : ""; };
+  box.innerHTML = `<strong>⚠ ${n} alerte${n > 1 ? "s" : ""}</strong><ul>` +
     list.map(({ p, v, a }) => `<li><button class="link" data-id="${p.id}">${esc(p.nom)} ${esc(v.version)}</button> : ${esc(a)}</li>`).join("") +
+    dep.map(({ p, v, postes }) => `<li><button class="link" data-vue="prod">${esc(p.nom)} ${esc(v.version)}</button> : livrée le ${fmtD(v.fin)}${depuis(v.fin)},
+      pas encore déployée${postes.some(Boolean) ? " sur " + esc(postes.join(", ")) : ""} — l'installer puis la saisir dans 📦 En production</li>`).join("") +
     "</ul>";
+}
+$("#alerts").addEventListener("click", e => { if (e.target.closest("[data-vue]")) $('.tabs button[data-view="prod"]').click(); });
+const filtres = () => ({ pole: $("#g-pole").value, statut: $("#g-statut").value });
+function garde(v, statut) { return !statut || (statut === "alerte" ? ["Bloqué", "En retard"].includes(v.statut) : v.statut === statut); }
+function visibles() {   // projets et versions retenus par les filtres du Gantt (même règle que server.ppt_export)
+  const { pole, statut } = filtres();
+  return S.projets.filter(p => !pole || p.pole === pole).map(p => ({ ...p, versions: p.versions.filter(v => garde(v, statut)) }));
 }
 function grouped(list) {
   const order = [...S.poles, ...new Set(list.map(p => p.pole).filter(p => !S.poles.includes(p)))];
@@ -441,46 +466,62 @@ $("#equipe-vue").addEventListener("click", e => {   // « 5 ✓ » : déplie / r
 });
 
 // ---------- en production : une ligne par projet ----------
+function parcFiltre() {   // onglet En production : filtre par pôle (bancs de dev, de prod…)
+  const sel = $("#prod-pole"), poles = grouped(S.parc).map(([p]) => p), val = sel.value || store.get("prod-pole", "");
+  sel.innerHTML = `<option value="">Tous les pôles</option>` + poles.map(p => `<option>${esc(p)}</option>`).join("");
+  sel.value = poles.includes(val) ? val : "";
+  return S.parc.filter(p => !sel.value || p.pole === sel.value);
+}
 function renderProd() {
-  const lignes = grouped(S.parc).flatMap(([pole, ps]) => ps.map(p => {
-    const { livrees, enProd, derniere, suivante, aDeployer, cibleMaj } = infoProd(p);
+  const parc = parcFiltre(), avecPostes = parc.some(p => p.postes?.length);   // colonne « Poste » seulement si utile
+  const lignes = grouped(parc).flatMap(([pole, ps]) => ps.map(p => {
+    const { livrees, enProd, derniere, suivante } = infoProd(p);
     const etatBloc = b => RO ? etatHtml(b) : `<div class="pe-l">
         <select class="pe" data-k="etat" aria-label="État de ${esc(p.nom)}${b.poste ? " — " + esc(b.poste) : ""}">${["", ...Object.keys(ETATS)].map(k =>
-          `<option value="${k}" ${(b.etat || "") === k ? "selected" : ""}>${k ? ETATS[k].join(" ") + (k === "maj" && cibleMaj ? " → " + esc(cibleMaj.version) : "") : "—"}</option>`).join("")}</select>
+          `<option value="${k}" ${(b.etat || "") === k ? "selected" : ""}>${k ? ETATS[k].join(" ") + (k === "maj" && infoProd(b).cibleMaj ? " → " + esc(infoProd(b).cibleMaj.version) : "") : "—"}</option>`).join("")}</select>
         <input class="pe" type="date" data-k="etat_date" value="${b.etat_date || ""}" title="Depuis le" aria-label="État depuis le" ${b.etat ? "" : "hidden"}></div>
         <input class="pe pe-note" data-k="etat_note" value="${esc(b.etat_note || "")}" maxlength="120" placeholder="commentaire (ex. alim HS)" ${b.etat ? "" : "hidden"}>`;
-    const etatCell = postesDe(p).map(b => `<div class="poste">${b.poste ? `<b class="poste-nom">${esc(b.poste)}</b>` : ""}${etatBloc(b)}</div>`).join("");
     const vbtn = (v, html) => `<button class="link vlink" data-id="${p.id}" data-v="${esc(v.version)}" title="Voir ce qu'apporte ${esc(v.version)}">${html}</button>`;
-    const prodCell = RO ? (enProd ? `▲ ${vbtn(enProd, `<b>${esc(enProd.version)}</b>`)} <span class="muted">· ${fmtD(enProd.prod)}</span>` : livrees.length ? "" : '<span class="muted">—</span>')
-      : `<div class="pe-l"><select class="pe" data-k="prod_version" aria-label="Version en production de ${esc(p.nom)}"><option value="">—</option>${livrees.map(v =>
-          `<option ${enProd && v.version === enProd.version ? "selected" : ""}>${esc(v.version)}</option>`).join("")}</select>
-        <input class="pe" type="date" data-k="prod_date" value="${enProd ? enProd.prod : ""}" title="En production depuis le" aria-label="En production depuis le" ${enProd ? "" : "hidden"}></div>`;
-    // dernière livrée : seulement si elle apporte quelque chose (plus récente que la prod, ou prod inconnue)
-    const info = aDeployer ? `<div class="a-deployer">${vbtn(derniere, `<span class="badge st-En-retard">⚠ ${esc(derniere.version)} à déployer</span>`)} <span class="muted">livrée le ${fmtD(derniere.fin)}</span></div>`
-      : !enProd && derniere ? `<div class="muted">dernière livrée : ${esc(derniere.version)} (${fmtD(derniere.fin)})</div>` : "";
-    return `<tr class="${p.prod_publie === false ? "non-publie" : ""}" data-pid="${p.id}">
-      ${RO ? "" : `<td><input type="checkbox" class="pp" data-pid="${p.id}" ${p.prod_publie !== false ? "checked" : ""}
+    const prodBloc = b => {   // version en production du banc, ou de chaque poste (deux postes peuvent avoir des versions différentes)
+      const { enProd, aDeployer } = infoProd(b);
+      const champ = RO ? (enProd ? `▲ ${vbtn(enProd, `<b>${esc(enProd.version)}</b>`)} <span class="muted">· ${fmtD(enProd.prod)}</span>` : livrees.length ? "" : '<span class="muted">—</span>')
+        : `<div class="pe-l"><select class="pe" data-k="prod_version" aria-label="Version en production de ${esc(p.nom)}${b.poste ? " — " + esc(b.poste) : ""}"><option value="">—</option>${livrees.map(v =>
+            `<option ${enProd && v.version === enProd.version ? "selected" : ""}>${esc(v.version)}</option>`).join("")}</select>
+          <input class="pe" type="date" data-k="prod_date" value="${enProd ? enProd.prod : ""}" title="En production depuis le" aria-label="En production depuis le" ${enProd ? "" : "hidden"}></div>`;
+      // dernière livrée : seulement si elle apporte quelque chose (plus récente que la prod, ou prod inconnue)
+      const info = RO ? "" : aDeployer ? `<div class="a-deployer">${vbtn(derniere, `<span class="badge st-En-retard">⚠ ${esc(derniere.version)} à déployer</span>`)} <span class="muted">livrée le ${fmtD(derniere.fin)}</span></div>`
+        : !enProd && derniere ? `<div class="muted">dernière livrée : ${esc(derniere.version)} (${fmtD(derniere.fin)})</div>` : "";
+      return champ + info;
+    };
+    // une ligne par poste (une seule sans poste) ; projet, pôle et prochaine version fusionnés sur les lignes du projet
+    const blocs = postesDe(p), rs = blocs.length > 1 ? ` rowspan="${blocs.length}"` : "";
+    const lignesP = blocs.map((b, n) => `<tr data-i="${b.i}">${n ? "" : `
+      ${RO ? "" : `<td${rs}><input type="checkbox" class="pp" data-pid="${p.id}" ${p.prod_publie !== false ? "checked" : ""}
           aria-label="Afficher ${esc(p.nom)} sur la page publiée" title="Afficher sur la page publiée"></td>`}
-      <td><button class="link" data-id="${p.id}" data-v="${esc((enProd || derniere || suivante || {}).version || "")}">${esc(p.nom)}</button></td>
-      <td><i class="pt" style="background:${color(pole)}"></i>${esc(court(pole))}</td>
-      <td class="etat-cell">${etatCell}</td>
-      <td>${prodCell}${info}</td>
-      <td>${suivante ? `${vbtn(suivante, `<b>${esc(suivante.version)}</b>`)} <span class="badge ${stc(suivante.statut)}">${esc(suivante.statut)}</span> <span class="muted">→ ${fmtD(suivante.fin)}</span>` : '<span class="muted">—</span>'}</td>
-    </tr>`;
+      <td${rs}><button class="link" data-id="${p.id}" data-v="${esc((enProd || derniere || suivante || {}).version || "")}">${esc(p.nom)}</button></td>
+      <td${rs}><i class="pt" style="background:${color(pole)}"></i>${esc(court(pole))}</td>`}
+      ${avecPostes ? `<td class="poste-cell">${esc(b.poste || "")}</td>` : ""}
+      <td class="etat-cell">${etatBloc(b)}</td>
+      <td>${prodBloc(b)}</td>
+      ${n ? "" : `<td${rs}>${suivante ? `${vbtn(suivante, `<b>${esc(suivante.version)}</b>`)} <span class="badge ${stc(suivante.statut)}">${esc(suivante.statut)}</span> <span class="muted">→ ${fmtD(suivante.fin)}</span>` : '<span class="muted">—</span>'}</td>`}
+    </tr>`).join("");
+    return `<tbody class="${p.prod_publie === false ? "non-publie" : ""}" data-pid="${p.id}">${lignesP}</tbody>`;
   }));
-  $("#prod-table").innerHTML = lignes.length ? `<table class="prod"><thead><tr>${RO ? "" : '<th title="Afficher sur la page publiée">Publié</th>'}<th>Projet</th><th>Pôle</th><th>État</th><th>En production</th><th>Prochaine</th></tr></thead><tbody>${lignes.join("")}</tbody></table>` : '<p class="empty">Aucun projet.</p>';
+  $("#prod-table").innerHTML = lignes.length ? `<table class="prod"><thead><tr>${RO ? "" : '<th title="Afficher sur la page publiée">Publié</th>'}<th>Projet</th><th>Pôle</th>${avecPostes ? "<th>Poste</th>" : ""}<th>État</th><th>En production</th><th>Prochaine</th></tr></thead>${lignes.join("")}</table>` : '<p class="empty">Aucun projet.</p>';
 }
 
 $("#btn-csv").addEventListener("click", () => {   // tableau production -> CSV (Excel : « ; » et BOM UTF-8)
   const cel = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lignes = [["Projet", "Poste", "Pôle", "État", "Commentaire", "État depuis", "Version en production", "En production depuis",
                    "Version à déployer", "Livrée le", "Prochaine version", "Statut prochaine", "Fin prévue prochaine", "Équipe"]];
-  for (const [pole, ps] of grouped(S.parc)) for (const p of ps) {
-    const { enProd, derniere, suivante, aDeployer } = infoProd(p);
-    for (const b of postesDe(p))   // une ligne par poste
+  for (const [pole, ps] of grouped(parcFiltre())) for (const p of ps) {
+    const { suivante } = infoProd(p);
+    for (const b of postesDe(p)) {   // une ligne par poste, avec sa version
+      const { enProd, derniere } = infoProd(b), aDeployer = !RO && infoProd(b).aDeployer;   // page publiée : pas de « à déployer »
       lignes.push([p.nom, b.poste || "", pole, ETATS[b.etat]?.[1] || "", b.etat_note, fmtD(b.etat_date || ""), enProd?.version, enProd ? fmtD(enProd.prod) : "",
                    aDeployer ? derniere.version : "", aDeployer ? fmtD(derniere.fin) : "", suivante?.version, suivante?.statut,
                    suivante ? fmtD(suivante.fin) : "", liste(p.ressources).join(", ")]);
+    }
   }
   const csv = "\ufeff" + lignes.map(l => l.map(cel).join(";")).join("\r\n") + "\r\n";
   telecharger(csv, `${S.config.application.titre} - En production ${S.today}.csv`, "text/csv;charset=utf-8");
@@ -552,10 +593,11 @@ $("#btn-drawio").addEventListener("click", exportDrawio);
 $("#prod-table").addEventListener("change", async e => {   // état / version en production : enregistrés tout de suite
   const c = e.target.closest(".pe");
   if (!c) return;
-  const tr = c.closest("tr"), p = S.projets.find(x => x.id === tr.dataset.pid), blocs = [...tr.querySelectorAll(".poste")];
-  const champ = (k, b = c.closest(".poste") || blocs[0]) => b.querySelector(`[data-k="${k}"]`) || tr.querySelector(`[data-k="${k}"]`);
+  const tr = c.closest("tbody"), p = S.projets.find(x => x.id === tr.dataset.pid);   // les lignes du projet
+  const blocs = postesDe(p), i = +c.closest("[data-i]").dataset.i;   // un bloc par poste (un seul sans poste)
+  const champ = (k, j = i) => tr.querySelector(`[data-i="${j}"] [data-k="${k}"]`);
   const versions = p.versions.map(v => ({ ...v }));
-  const actuelle = versions.filter(v => v.prod).sort((a, b) => b.prod.localeCompare(a.prod))[0];
+  const actuelle = infoProd(blocs[i]).enProd;   // version qui tourne sur ce poste (ou ce banc)
   const livraison = v => v?.fin?.length === 10 ? v.fin : S.today;   // date « Terminé » de la version (sinon aujourd'hui)
   // dates proposées, modifiables : opérationnel depuis la mise en prod ; mise en prod = date de livraison de la version
   // opérationnel : depuis la mise en prod, sinon la livraison de la dernière version, sinon aujourd'hui
@@ -563,20 +605,30 @@ $("#prod-table").addEventListener("change", async e => {   // état / version en
     : actuelle ? actuelle.prod : livraison(infoProd(p).derniere);
   if (c.dataset.k === "prod_version" && c.value)
     champ("prod_date").value = c.value === actuelle?.version ? actuelle.prod : livraison(versions.find(v => v.version === c.value));
-  const choix = champ("prod_version").value;
-  if (!choix) { if (actuelle) actuelle.prod = ""; }               // « — » : plus rien en production
-  else versions.find(v => v.version === choix).prod = champ("prod_date").value || S.today;   // l'historique des autres est gardé
-  let fini = "";   // mise à jour terminée : nouvelle version installée sur un banc « en mise à jour » → opérationnel
-  const enMaj = blocs.filter(b => champ("etat", b).value === "maj");   // tous les postes en mise à jour
-  if (c.dataset.k === "prod_version" && choix && choix !== actuelle?.version && enMaj.length) {
-    for (const b of enMaj) { champ("etat", b).value = "ok"; champ("etat_date", b).value = champ("prod_date").value || S.today; champ("etat_note", b).value = ""; }
-    fini = ` — mise à jour terminée : ${choix} installée, banc ✅ opérationnel`;
+  const choix = champ("prod_version").value, quand = champ("prod_date").value || S.today;
+  let fini = "";   // mise à jour terminée : nouvelle version installée sur un banc / poste « en mise à jour » → opérationnel
+  if (c.dataset.k === "prod_version" && choix && choix !== actuelle?.version && champ("etat").value === "maj") {
+    champ("etat").value = "ok"; champ("etat_date").value = quand; champ("etat_note").value = "";
+    fini = ` — mise à jour terminée : ${choix} installée${blocs[i].poste ? " sur " + blocs[i].poste : ""}, ✅ opérationnel`;
   }
-  const lire = b => ({ etat: champ("etat", b).value, etat_note: champ("etat_note", b).value,
-                       etat_date: champ("etat", b).value ? champ("etat_date", b).value : "" });
+  const lire = j => ({ etat: champ("etat", j).value, etat_note: champ("etat_note", j).value,
+                       etat_date: champ("etat", j).value ? champ("etat_date", j).value : "" });
+  let corps;
+  if (p.postes?.length) {   // chaque poste garde sa version
+    const postes = p.postes.map((x, j) => { const v = champ("prod_version", j).value;
+      return { nom: x.nom, ...lire(j), version: v, version_date: v ? champ("prod_date", j).value || S.today : "" }; });
+    for (const x of postes) {   // ▲ du Gantt : première mise en production de la version, tous postes confondus
+      const v = versions.find(w => w.version === x.version);
+      if (v && (!v.prod || x.version_date < v.prod)) v.prod = x.version_date;
+    }
+    corps = { ...p, versions, postes };
+  } else {
+    if (!choix) { if (actuelle) versions.find(v => v.version === actuelle.version).prod = ""; }   // « — » : plus rien en production
+    else versions.find(v => v.version === choix).prod = quand;   // l'historique des autres est gardé
+    corps = { ...p, versions, ...lire(0) };
+  }
   try {
-    await api("PUT", `/api/projets/${p.id}`, p.postes?.length ? { ...p, versions, postes: blocs.map((b, i) => ({ nom: p.postes[i].nom, ...lire(b) })) }
-                                                              : { ...p, versions, ...lire(blocs[0]) });
+    await api("PUT", `/api/projets/${p.id}`, corps);
     await load(); toast(`${p.nom} : enregistré${fini}`);
   } catch (err) { toast(err.message, true); renderProd(); }
 });
@@ -586,7 +638,7 @@ $("#prod-table").addEventListener("change", async e => {   // case « Publié »
   const p = S.projets.find(x => x.id === c.dataset.pid);
   try {
     await api("PUT", `/api/projets/${p.id}`, { ...p, prod_publie: c.checked });
-    p.prod_publie = c.checked; c.closest("tr").classList.toggle("non-publie", !c.checked);
+    p.prod_publie = c.checked; c.closest("tbody").classList.toggle("non-publie", !c.checked);
     toast(`${p.nom} : ${c.checked ? "affiché" : "masqué"} sur la page publiée (à la prochaine publication)`);
   } catch (err) { c.checked = !c.checked; toast(err.message, true); }
 });
@@ -846,6 +898,7 @@ $("#j-list").addEventListener("click", e => {
 $("#d-close").addEventListener("click", () => closeEditor());
 $("#b-cancel").addEventListener("click", () => closeEditor());
 if (RO) $("#b-cancel").textContent = "Fermer";
+if (!RO) $("#prod-aide").textContent += " Sous la version installée : « ⚠ à déployer » si une version plus récente est livrée (visible ici seulement, pas sur la page publiée).";
 $("#drawer-bg").addEventListener("click", () => closeEditor());
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && edit) closeEditor();

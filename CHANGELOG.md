@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 ### Added
+- 📦 En production : une ligne par poste et une colonne « Poste » (le nom du poste n'est plus répété dans État et En production)
 - Période du Gantt (Du / au) : bouton 📅 calendrier des mois (Chrome / Edge)
+- Alerte « livrée, pas encore déployée » en haut de la Roadmap (par version, avec les postes concernés) ; clic : onglet 📦 En production
+- État en production : date du changement (« 🔧 En mise à jour · depuis le 10/11/2026 ») au lieu d'une durée
+- 📦 En production : filtre par pôle (bancs de dev, de prod…), repris par le CSV ; « à déployer » visible seulement dans l'application, pas sur les pages publiées
+- Postes : chaque poste a sa propre version en production (📦 En production, CSV, page publiée), avec son « à déployer » ; installer une version sur un poste « en mise à jour » ne repasse que ce poste en opérationnel
 - Paquet .deb : la mise à jour arrête l'instance déjà lancée (elle gardait l'ancien code : nouveaux champs ignorés sans message, ex. Postes)
 - Bouton « ⤓ Importer tout » : importe les dépôts de tous les projets à la suite, résumé des échecs à la fin
 - Conformité au standard des dépôts sur chaque carte projet (ROADMAP.md, CHANGELOG.md, tags Git, constatée au dernier import) et filtre « Non conformes au standard »
