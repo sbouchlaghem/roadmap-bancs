@@ -756,6 +756,10 @@ function closeEditor(force) {
   $("#drawer").classList.remove("open"); $("#drawer").setAttribute("aria-hidden", "true"); $("#drawer-bg").hidden = true; edit = null;
 }
 function setDirty(v) { dirty = v; $("#dirty").hidden = !v; }
+// date de version : texte libre (AAAA-MM-JJ, AAAA-MM ou ? venant des dépôts) + calendrier 📅 pour choisir un jour
+const champDate = (f, val) => `<span class="date-l"><input data-f="${f}" value="${esc(val)}" placeholder="AAAA-MM-JJ">` +
+  `<button type="button" class="icon" data-cal title="Choisir dans le calendrier" aria-label="Calendrier">📅</button>` +
+  `<input type="date" class="cal-in" tabindex="-1" aria-hidden="true"></span>`;
 function renderVersions() {
   $("#v-count").textContent = `(${edit.versions.length})`;
   const stColor = { "Terminé": "#16a34a", "En cours": "#0d9488", "Planifié": "#6366f1", "Bloqué": "#ea580c", "En retard": "#dc2626" };
@@ -765,8 +769,8 @@ function renderVersions() {
       <div class="ver-top">
         <label>Version<input data-f="version" value="${esc(v.version)}" placeholder="v1.0.0"></label>
         <label>Statut<select data-f="statut"><option value="">auto (${MANUELS.includes(v.statut) || !v.statut ? "dates" : esc(v.statut)})</option>${MANUELS.map(s => `<option ${s === v.statut ? "selected" : ""}>${s}</option>`).join("")}</select></label>
-        <label>Début<input data-f="debut" value="${esc(v.debut)}" placeholder="AAAA-MM-JJ"></label>
-        <label>Fin / livraison<input data-f="fin" value="${esc(v.fin)}" placeholder="AAAA-MM-JJ"></label>
+        <label>Début${champDate("debut", v.debut)}</label>
+        <label>Fin / livraison${champDate("fin", v.fin)}</label>
         <button class="icon" data-del="${i}" title="Supprimer cette version" aria-label="Supprimer la version ${esc(v.version)}">🗑</button>
       </div>
       ${alerte(v) ? `<p class="ver-warn">⚠ ${esc(alerte(v))}</p>` : ""}
@@ -914,6 +918,19 @@ $("#b-branches").addEventListener("click", e => busy(e.target, async () => {
     toast(`${d.branches.length} branche(s)` + (d.defaut ? ` — par défaut : ${d.defaut}` : ""));
   } catch (err) { toast(err.message, true); }
 }));
+$("#versions").addEventListener("click", e => {   // 📅 : ouvre le calendrier, pré-rempli avec la date du champ
+  const b = e.target.closest("[data-cal]"); if (!b) return;
+  e.preventDefault();
+  const cal = b.nextElementSibling, txt = b.previousElementSibling;
+  cal.value = /^\d{4}-\d{2}-\d{2}$/.test(txt.value) ? txt.value : "";
+  try { cal.showPicker(); } catch (_) { cal.focus(); }   // navigateur trop ancien : focus sur le champ date
+});
+$("#versions").addEventListener("change", e => {   // jour choisi : recopié dans le champ texte (même chemin qu'une saisie)
+  if (!e.target.classList.contains("cal-in") || !e.target.value) return;
+  const txt = e.target.parentElement.querySelector("[data-f]");
+  txt.value = e.target.value;
+  txt.dispatchEvent(new Event("input", { bubbles: true }));
+});
 $("#versions").addEventListener("input", e => {
   const f = e.target.dataset.f; if (!f) return;
   const i = +e.target.closest(".ver").dataset.i;

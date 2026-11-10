@@ -4,6 +4,7 @@
 ### Added
 - 📦 En production : une ligne par poste et une colonne « Poste » (le nom du poste n'est plus répété dans État et En production)
 - Période du Gantt (Du / au) : bouton 📅 calendrier des mois (Chrome / Edge)
+- Fiche projet : bouton 📅 calendrier sur les dates de début et de fin des versions (la saisie au clavier reste possible : AAAA-MM, ?)
 - Alerte « livrée, pas encore déployée » en haut de la Roadmap (par version, avec les postes concernés) ; clic : onglet 📦 En production
 - État en production : date du changement (« 🔧 En mise à jour · depuis le 10/11/2026 ») au lieu d'une durée
 - 📦 En production : filtre par pôle (bancs de dev, de prod…), repris par le CSV ; « à déployer » visible seulement dans l'application, pas sur les pages publiées
