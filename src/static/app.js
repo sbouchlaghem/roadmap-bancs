@@ -591,6 +591,13 @@ $("#prod-table").addEventListener("change", async e => {   // case « Publié »
   } catch (err) { c.checked = !c.checked; toast(err.message, true); }
 });
 
+// conformité au standard (constatée au dernier import) : liste de ce qui manque, null = pas encore importé
+function manques(p) {
+  if (!p.depot) return ["dépôt"];
+  const c = p.conformite;
+  return c ? [["roadmap", "ROADMAP.md"], ["changelog", "CHANGELOG.md"], ["tags", "tags Git"]].filter(([k]) => !c[k]).map(([, n]) => n) : null;
+}
+
 // ---------- cartes ----------
 function renderCards() {
   const q = $("#search").value.trim().toLowerCase();
@@ -600,7 +607,8 @@ function renderCards() {
   $("#pole-tabs").innerHTML = [["", S.projets], ...poles].map(([p, ps]) =>
     `<button data-pole="${esc(p)}" aria-pressed="${p === sel}" aria-selected="${p === sel}">` +
     (p ? `<i style="background:${color(p)}"></i>${esc(court(p))}` : "Tous") + ` <span class="muted">${ps.length}</span></button>`).join("");
-  const list = S.projets.filter(p => (!sel || p.pole === sel) &&
+  const nc = $("#f-nc").checked;
+  const list = S.projets.filter(p => (!sel || p.pole === sel) && (!nc || manques(p)?.length) &&
     (!q || [p.nom, p.pole, ...(p.ressources || [])].join(" ").toLowerCase().includes(q)));   // recherche aussi par personne
   $("#cards").innerHTML = grouped(list).map(([pole, ps]) => `
     <div class="pole-title"><i style="background:${color(pole)}"></i>${esc(pole)} · ${ps.length}</div>
@@ -616,6 +624,8 @@ function renderCards() {
         ${n && derive(n) ? `<div class="kv"><span class="muted">Dérive</span><span>${fmtDer(derive(n)).trim()}</span></div>` : ""}
         <div class="kv"><span class="muted">Versions</span><span>${p.versions.length}</span></div>
         ${equipe(p) ? `<div class="kv"><span class="muted">Équipe</span><span class="equipe">${esc(equipe(p))}</span></div>` : ""}
+        ${(m => m === null || !p.depot ? "" : m.length ? `<div class="kv"><span class="muted">Standard</span><span class="nc-txt" title="Manque : ${esc(m.join(", "))} (voir modeles/GUIDE.md)">✗ ${esc(m.map(x => x.replace(".md", "")).join(" · "))}</span></div>`
+          : `<div class="kv"><span class="muted">Standard</span><span class="ok" title="Vérifié à l'import du ${fmtD(p.conformite.date)}">✓ conforme</span></div>`)(manques(p))}
         <div class="repo">${p.depot ? "⎇ " + esc(p.depot.split(/[/:]/).pop()) + (p.branche ? ` (${esc(p.branche)})` : "") : "pas de dépôt"}</div>
       </button>`;
     }).join("")}</div>`).join("") || `<p class="empty">Aucun projet.</p>`;
@@ -795,6 +805,8 @@ document.querySelectorAll("[data-calm]").forEach(b => {
   });
 });
 $("#search").addEventListener("input", renderCards);
+$("#f-nc").addEventListener("change", renderCards);
+$("#prod-pole").addEventListener("change", e => { store.set("prod-pole", e.target.value); renderProd(); });
 $("#pole-tabs").addEventListener("click", e => {
   const b = e.target.closest("button[data-pole]");
   if (b) { store.set("pole", b.dataset.pole); renderCards(); }
@@ -812,6 +824,17 @@ document.addEventListener("click", e => {
   if (v) showDetail(p, v);
 });
 $("#btn-new").addEventListener("click", () => openEditor(null));
+$("#btn-import-tout").addEventListener("click", e => busy(e.currentTarget, async () => {
+  if (edit) return toast("Fermer d'abord la fiche du projet", true);
+  const list = S.projets.filter(p => p.depot), erreurs = [];
+  if (!list.length) return toast("Aucun projet n'a de dépôt", true);
+  for (const [i, p] of list.entries()) {   // un par un : le serveur écrit un projet à la fois
+    toast(`Import ${i + 1}/${list.length} : ${p.nom}…`);
+    try { await api("POST", `/api/projets/${p.id}/import`); } catch (err) { erreurs.push(`${p.nom} : ${err.message}`); }
+  }
+  await load();
+  toast(`${list.length - erreurs.length}/${list.length} dépôt(s) importé(s)` + (erreurs.length ? ` — échec : ${erreurs.join(" ; ")}` : ""), erreurs.length > 0);
+}));
 $("#j-form").addEventListener("submit", async e => {
   e.preventDefault();
   if (await saveJalons([...S.jalons, { date: $("#j-date").value, label: $("#j-label").value }])) e.target.reset();

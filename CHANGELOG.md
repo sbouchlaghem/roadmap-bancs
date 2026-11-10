@@ -4,6 +4,8 @@
 ### Added
 - Période du Gantt (Du / au) : bouton 📅 calendrier des mois (Chrome / Edge)
 - Paquet .deb : la mise à jour arrête l'instance déjà lancée (elle gardait l'ancien code : nouveaux champs ignorés sans message, ex. Postes)
+- Bouton « ⤓ Importer tout » : importe les dépôts de tous les projets à la suite, résumé des échecs à la fin
+- Conformité au standard des dépôts sur chaque carte projet (ROADMAP.md, CHANGELOG.md, tags Git, constatée au dernier import) et filtre « Non conformes au standard »
 - Période du Gantt : mois affichés en français (« septembre 2026 ») quelle que soit la langue du navigateur
 - Légende : échantillons de statut dessinés comme les barres du Gantt (couleur du pôle, foncée ou vive)
 - Filtres du Gantt par pôle et par statut (dont « ⚠ Bloqué ou en retard »), repris par l'export PPT et draw.io

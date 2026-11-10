@@ -543,6 +543,12 @@ def import_depot(pid):
         elif not any(v["version"].lower() == "unreleased" for v in p["versions"]):
             p["versions"].append(unreleased)
     saved = save(p, pid)
+    # conformité au standard des dépôts (modeles/GUIDE.md), constatée à l'import : affichée sur la carte du projet
+    conf = {"roadmap": bool(roadmap) and roadmap[0].upper() == "ROADMAP.MD", "changelog": bool(changelog),
+            "tags": bool(tags), "date": date.today().isoformat()}
+    lst = _read_list()
+    next(e for e in lst if e["id"] == pid)["conformite"] = saved["conformite"] = conf
+    write_atomic(PROJETS, json.dumps(lst, ensure_ascii=False, indent=2) + "\n")
     src = " + ".join(nom for nom, _ in files) or "aucun fichier"
     ajoutees = len({R.vkey(v["version"]) or v["version"] for v in saved["versions"]} - avant)
     msg = f"{origine} : {src} + {len(tags)} tag(s) Git : {ajoutees} version(s) ajoutée(s)"

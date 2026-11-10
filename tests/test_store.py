@@ -226,12 +226,16 @@ class TestStore(unittest.TestCase):
         self.assertEqual((v["v2.1.0"]["statut"], v["v2.1.0"]["fin"], v["v2.1.0"]["prevu"]),
                          ("Terminé", "2026-10-08", "2026-10-01"))  # livrée d'après le CHANGELOG, même sans tag
         self.assertIn("rattaché à v2.2.0", msg)
+        self.assertEqual({k: p["conformite"][k] for k in ("roadmap", "changelog", "tags")},
+                         {"roadmap": True, "changelog": True, "tags": False})  # dossier sans Git : pas de tag
+        self.assertEqual(store.get(p["id"])["conformite"], p["conformite"])  # enregistrée dans projets.json
         p, msg = store.import_depot(p["id"])
         self.assertEqual((len(p["versions"]), " 0 version(s) ajoutée(s)" in msg), (2, True))  # réimport : rien ne bouge
         os.remove(os.path.join(depot, "ROADMAP.md"))
         q = store.save({"nom": "SansRoadmap", "depot": depot})
         q, _ = store.import_depot(q["id"])
         self.assertIn("Unreleased", [x["version"] for x in q["versions"]])  # pas de version prévue : gardé tel quel
+        self.assertFalse(q["conformite"]["roadmap"])
 
     def test_mise_en_production(self):
         depot = tempfile.mkdtemp(dir=TMP)

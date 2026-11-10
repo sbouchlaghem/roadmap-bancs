@@ -98,6 +98,9 @@ main { padding: 20px 24px 40px; }
 .p-bar .tabs { flex-wrap: wrap; }
 .p-bar .tabs i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
 .search { width: min(380px, 100%); padding: 8px 12px; }
+.p-bar .check { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); cursor: pointer; }
+.nc-txt { color: #c2410c; font-weight: 600; font-size: 12px; text-align: right; } [data-theme="sombre"] .nc-txt { color: #fb923c; }
+.ok { color: #16a34a; font-weight: 600; font-size: 12px; } [data-theme="sombre"] .ok { color: #4ade80; }
 .pole-title { display: flex; align-items: center; gap: 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em;
   color: var(--muted); margin: 18px 0 8px; }
 .pole-title i { width: 10px; height: 10px; border-radius: 50%; }
@@ -178,6 +181,8 @@ main { padding: 20px 24px 40px; }
 /* la page publiée ne montre que le Gantt : pas d'onglets, d'actions, d'alertes internes ni de liste des jalons */
 .ro .top .tabs button[data-view="projets"], .ro .actions, .ro #alerts, .ro #hors-slide, .ro .jalons, .ro #view-projets { display: none !important; }
 .ro .g-name { cursor: default; }
+.ro #btn-import-tout { display: none !important; }
+#hors-slide .eq-items { margin-top: 8px; }
 .ro .bar { cursor: pointer; }
 
 /* ---- détail d'une version (page publiée) ---- */
