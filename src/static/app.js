@@ -521,8 +521,8 @@ function renderProd() {
   $("#prod-table").innerHTML = lignes.length ? `<table class="prod"><thead><tr>${RO ? "" : '<th title="Afficher sur la page publiée">Publié</th>'}<th>Projet</th><th>Pôle</th>${avecPostes ? "<th>Poste</th>" : ""}<th>État</th><th>En production</th><th>Prochaine</th></tr></thead>${lignes.join("")}</table>` : '<p class="empty">Aucun projet.</p>';
 }
 
-$("#btn-csv").addEventListener("click", () => {   // tableau production -> CSV (Excel : « ; » et BOM UTF-8)
-  const cel = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+$("#btn-csv").addEventListener("click", () => {   // tableau production -> Excel .xlsx (couleurs, filtres, en-tête figé)
+  const etats = [""];   // état de chaque ligne, pour colorer la cellule
   const lignes = [["Projet", "Poste", "Pôle", "État", "Commentaire", "État depuis", "Version en production", "En production depuis",
                    "Version à déployer", "Livrée le", "Prochaine version", "Statut prochaine", "Fin prévue prochaine", "Équipe"]];
   for (const [pole, ps] of grouped(parcFiltre())) for (const p of ps) {
@@ -532,11 +532,52 @@ $("#btn-csv").addEventListener("click", () => {   // tableau production -> CSV (
       lignes.push([p.nom, b.poste || "", pole, ETATS[b.etat]?.[1] || "", b.etat_note, fmtD(b.etat_date || ""), enProd?.version, enProd ? fmtD(enProd.prod) : "",
                    aDeployer ? derniere.version : "", aDeployer ? fmtD(derniere.fin) : "", suivante?.version, suivante?.statut,
                    suivante ? fmtD(suivante.fin) : "", liste(p.ressources).join(", ")]);
+      etats.push(b.etat);
     }
   }
-  const csv = "\ufeff" + lignes.map(l => l.map(cel).join(";")).join("\r\n") + "\r\n";
-  telecharger(csv, `${S.config.application.titre} - En production ${S.today}.csv`, "text/csv;charset=utf-8");
+  telecharger(xlsx(lignes, (l, i) => i ? [, , color(l[2]), XL_ETATS[etats[i]]] : []),
+              `${S.config.application.titre} - En production ${S.today}.xlsx`,
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 });
+const XL_ETATS = { ok: "#C6EFCE", maj: "#DDEBF7", degrade: "#FFEB9C", panne: "#FFC7CE" };   // fonds clairs fa\u00e7on Excel
+// lignes : tableau de lignes (la 1re = en-t\u00eate) ; fonds(ligne, i) -> couleur #rrggbb par colonne (p\u00f4le : texte blanc)
+function xlsx(lignes, fonds) {
+  const x = s => esc(s).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");   // caract\u00e8res interdits en XML
+  const styles = ["0,0,1"], sid = (fill, font) => {   // style = "fond,police,bordure" ; fonds dynamiques (couleurs des p\u00f4les)
+    const k = `${fill},${font},1`, i = styles.indexOf(k); return i >= 0 ? i : styles.push(k) - 1; };
+  const fills = [], fid = c => { if (!c) return 0; const i = fills.indexOf(c); return 2 + (i >= 0 ? i : fills.push(c) - 1); };
+  const col = j => String.fromCharCode(65 + j), n = lignes.length, m = lignes[0].length;
+  const rows = lignes.map((l, i) => `<row r="${i + 1}">${l.map((v, j) => {
+    const f = i ? fonds(l, i)[j] : "#1F3864", s = sid(fid(f), !i || j === 2 ? 1 : j === 0 ? 2 : 0);
+    return `<c r="${col(j)}${i + 1}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`; }).join("")}</row>`).join("");
+  const larg = lignes[0].map((_, j) => Math.min(60, Math.max(...lignes.map(l => String(l[j] ?? "").length)) + 3));
+  const fichiers = {
+    "[Content_Types].xml": `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    "_rels/.rels": `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    "xl/workbook.xml": `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="En production" sheetId="1" r:id="r1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'En production'!$A$1:$${col(m - 1)}$${n}</definedName></definedNames></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="r2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    "xl/worksheets/sheet1.xml": `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${larg.map((w, j) => `<col min="${j + 1}" max="${j + 1}" width="${w}" customWidth="1"/>`).join("")}</cols><sheetData>${rows}</sheetData><autoFilter ref="A1:${col(m - 1)}${n}"/></worksheet>`,
+  };
+  fichiers["xl/styles.xml"] = `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="${2 + fills.length}"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>${fills.map(c => `<fill><patternFill patternType="solid"><fgColor rgb="FF${c.slice(1).toUpperCase()}"/></patternFill></fill>`).join("")}</fills><borders count="2"><border/><border>${["left", "right", "top", "bottom"].map(b => `<${b} style="thin"><color rgb="FFBFBFBF"/></${b}>`).join("")}</border></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="${styles.length}">${styles.map(k => { const [f, p, b] = k.split(","); return `<xf fillId="${f}" fontId="${p}" borderId="${b}" applyFill="1" applyFont="1" applyBorder="1"><alignment vertical="center" wrapText="1"/></xf>`; }).join("")}</cellXfs></styleSheet>`;
+  return zip(fichiers);
+}
+function zip(fichiers) {   // archive ZIP sans compression (suffit pour Excel)
+  const enc = new TextEncoder(), crcT = [...Array(256)].map((_, n) => { for (let k = 0; k < 8; k++) n = n & 1 ? 0xEDB88320 ^ (n >>> 1) : n >>> 1; return n >>> 0; });
+  const crc = d => { let c = -1; for (const o of d) c = crcT[(c ^ o) & 255] ^ (c >>> 8); return (c ^ -1) >>> 0; };
+  const u = (...v) => { const b = new DataView(new ArrayBuffer(v.length * 4)); let o = 0;   // [taille en octets, valeur]\u2026
+    for (let i = 0; i < v.length; i += 2) { v[i] === 2 ? b.setUint16(o, v[i + 1], true) : b.setUint32(o, v[i + 1], true); o += v[i]; }
+    return new Uint8Array(b.buffer, 0, o); };
+  const parts = [], central = []; let off = 0;
+  for (const [nom, txt] of Object.entries(fichiers)) {
+    const n = enc.encode(nom), d = enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + txt), c = crc(d);
+    const commun = [2, 20, 2, 0, 2, 0, 2, 0, 2, 33, 4, c, 4, d.length, 4, d.length, 2, n.length, 2, 0];
+    parts.push(u(4, 0x04034b50, ...commun), n, d);
+    central.push(u(4, 0x02014b50, 2, 20, ...commun, 2, 0, 2, 0, 2, 0, 4, 0, 4, off), n);
+    off += 30 + n.length + d.length;
+  }
+  const taille = central.reduce((s, p) => s + p.length, 0), k = Object.keys(fichiers).length;
+  return new Blob([...parts, ...central, u(4, 0x06054b50, 2, 0, 2, 0, 2, k, 2, k, 4, taille, 4, off, 2, 0)]);
+}
 function telecharger(texte, nom, type) {
   const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([texte], { type })), download: nom });
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);

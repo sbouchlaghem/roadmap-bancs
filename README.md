@@ -137,7 +137,7 @@ Un clic sur l'icône démarre le serveur et ouvre le navigateur ; un 2e clic rou
   en mise à jour le repasse ✅. Sous la version installée : « ⚠ vX à déployer » si une version plus
   récente est livrée. Et la prochaine version. « Terminé » = livrée (tag, CHANGELOG), pas forcément en production.
   Dates proposées (modifiables) : mise en production = date de livraison (« Terminé ») de la version,
-  opérationnel depuis = date de mise en production. **⬇ CSV** : le tableau pour Excel (aussi sur la page publiée).
+  opérationnel depuis = date de mise en production. **⬇ Excel** : le tableau en `.xlsx` (couleurs des pôles et des états, filtres, en-tête figé) (aussi sur la page publiée).
   Clic sur une version (en production, à déployer, prochaine) : ce qu'elle apporte.
   **⇪ Publier** envoie deux pages : `http://<serveur>/` (roadmap + production) et
   `http://<serveur>/production.html` (seulement la vue production, pour l'équipe prod).
