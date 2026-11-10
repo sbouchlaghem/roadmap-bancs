@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 ### Added
+- Paquet .deb : la mise à jour arrête l'instance déjà lancée (elle gardait l'ancien code : nouveaux champs ignorés sans message, ex. Postes)
 - Windows : lanceur `lancer.bat` (données dans %APPDATA%\roadmap-bancs)
 - **Postes** : un banc qui tourne sur plusieurs postes (fiche projet → Postes) a un état par poste dans 📦 En production, la page publiée et le CSV ; la carte du projet montre l'état le plus grave. Sans poste : rien ne change
 - Les enregistrements passent un par un : deux modifications rapprochées ne s'écrasent plus

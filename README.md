@@ -102,7 +102,7 @@ sudo apt install ./build/roadmap-bancs_<version>_all.deb
 
 Puis menu Applications → « Roadmap Outils & Bancs » (ou la commande `roadmap-bancs`).
 Un clic sur l'icône démarre le serveur et ouvre le navigateur ; un 2e clic rouvre l'onglet.
-Fermer l'application avant de réinstaller : `pkill -f /usr/lib/roadmap-bancs/main.py`.
+À l'installation, une instance déjà lancée est arrêtée (sinon elle garderait l'ancien code) : relancer depuis le menu.
 
 - Le script lance les tests d'abord et s'arrête si l'un échoue.
 - Version = dernière version livrée du CHANGELOG.md. Si `[Unreleased]` contient des lignes :

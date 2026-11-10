@@ -39,7 +39,19 @@ Description: Roadmap Outils & Bancs de Test
  ROADMAP.md / CHANGELOG.md des dépôts et export de la roadmap PowerPoint.
 EOF
 
+# une instance lancée avant la mise à jour garde l'ancien code Python en mémoire mais sert la nouvelle page web :
+# les nouveaux champs seraient ignorés sans message. On l'arrête ; rien n'est perdu (chaque enregistrement est sur disque)
+cat > "$PKG/DEBIAN/postinst" <<'FIN'
+#!/bin/sh
+set -e
+if [ "$1" = configure ] && pkill -f /usr/lib/roadmap-bancs/main.py; then
+  echo "Roadmap Bancs (ancienne version) arrêté : relancer l'application depuis le menu"
+fi
+exit 0
+FIN
+chmod 755 "$PKG/DEBIAN/postinst"
+
 dpkg-deb --build --root-owner-group "$PKG" >/dev/null
 rm -rf "$PKG"   # dossier intermédiaire
 echo "Paquet : $PKG.deb"
-echo "Installer : sudo apt install ./$PKG.deb   (fermer d'abord l'application si elle tourne)"
+echo "Installer : sudo apt install ./$PKG.deb   (l'application en cours est arrêtée : la relancer ensuite)"
