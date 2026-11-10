@@ -12,6 +12,7 @@ et publier une vue en lecture seule pour toute l'équipe.
 ```
 roadmap-bancs/
 ├── lancer.sh              lance l'application depuis les sources
+├── lancer.bat             idem sous Windows
 ├── construire-deb.sh      fabrique le paquet Ubuntu (.deb) dans build/
 ├── installer-serveur.sh   installe un serveur de consultation (Raspberry…) depuis le poste
 ├── main.py                point d'entrée (options : --port, --sans-navigateur)
@@ -84,6 +85,13 @@ Un pôle encore utilisé par un projet ne peut pas être supprimé ni renommé (
 
 `lancer.sh` utilise les mêmes données que la version installée. Autre dossier : `ROADMAP_DATA=/chemin ./lancer.sh`.
 Tests : `python3 -m unittest discover -s tests`.
+
+## Windows
+
+Installer [Python 3.10+](https://www.python.org/downloads/windows/) et [Git for Windows](https://git-scm.com/download/win),
+copier le dossier, puis double-cliquer sur `lancer.bat` (mêmes options que `lancer.sh`).
+Données dans `%APPDATA%\roadmap-bancs`. Publication sur la Raspberry : client OpenSSH de Windows 10/11 (`ssh`, `scp`).
+`/etc/roadmap-bancs/config.json` n'existe pas sous Windows : tout se règle dans ⚙ Paramètres.
 
 ## Paquet Ubuntu (.deb)
 
