@@ -369,8 +369,19 @@ function openParams() {
   $("#pr-chemin").textContent = S.configChemin;
   prPoles = structuredClone(S.config.poles); renderPrPoles(); prMsg("");
   $("#pr-equipe").value = annuaire().join("\n");
+  prSection(0);
   $("#params").showModal();
 }
+// une rubrique à la fois : onglets construits à partir des <legend>
+const prSets = [...document.querySelectorAll("#pr-form fieldset")];
+$("#pr-nav").innerHTML = prSets.map((f, i) => `<button type="button" data-sec="${i}">${esc(f.querySelector("legend").firstChild.textContent.trim())}</button>`).join("");
+function prSection(i) {
+  prSets.forEach((f, j) => f.hidden = j !== i);
+  $("#pr-nav").querySelectorAll("button").forEach((b, j) => b.setAttribute("aria-current", j === i));
+}
+$("#pr-nav").addEventListener("click", e => { const i = e.target.closest("[data-sec]")?.dataset.sec; if (i !== undefined) prSection(+i); });
+// champ invalide dans une rubrique cachée : l'afficher pour que le navigateur puisse le signaler
+$("#pr-form").addEventListener("invalid", e => { const i = prSets.indexOf(e.target.closest("fieldset")); if (i >= 0 && prSets[i].hidden) prSection(i); }, true);
 $("#btn-params").addEventListener("click", openParams);
 $("#pr-close").addEventListener("click", () => $("#params").close());
 $("#pr-add-pole").addEventListener("click", () => { prPoles.push({ nom: "", court: "", couleur: "#888888" }); renderPrPoles(); });
@@ -838,6 +849,9 @@ async function save() {
 async function busy(btn, fn) { btn.disabled = true; try { await fn(); } finally { btn.disabled = false; } }
 
 // ---------- événements ----------
+// menu ☰ : se referme après un choix, un clic ailleurs ou Échap
+document.addEventListener("click", e => { if (!e.target.closest("#menu summary") && (e.target.closest(".menu-pop button") || !e.target.closest("#menu"))) $("#menu").open = false; });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#menu").open) { $("#menu").open = false; $("#menu summary").focus(); } });
 document.querySelectorAll(".top .tabs button").forEach(b => b.addEventListener("click", () => {
   document.querySelectorAll(".top .tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
   for (const v of ["roadmap", "projets", "prod"]) $("#view-" + v).hidden = b.dataset.view !== v;
@@ -996,7 +1010,7 @@ $("#btn-pub").addEventListener("click", e => {
     catch (err) { toast(err.message, true); }
   });
 });
-$("#btn-ppt").addEventListener("click", e => busy(e.target, async () => {
+$("#btn-ppt").addEventListener("click", e => busy(e.currentTarget, async () => {
   try {
     toast("Génération du PowerPoint…");
     const r = await api("POST", "/api/export/ppt", { debut: $("#debut").value, fin: $("#fin").value, ...filtres() });

@@ -24,9 +24,16 @@
     <label class="period">Du <select id="debut"></select><button type="button" class="icon" data-calm title="Choisir dans le calendrier" aria-label="Calendrier">📅</button><input type="month" class="cal-in" tabindex="-1" aria-hidden="true"></label>
     <label class="period">au <select id="fin"></select><button type="button" class="icon" data-calm title="Choisir dans le calendrier" aria-label="Calendrier">📅</button><input type="month" class="cal-in" tabindex="-1" aria-hidden="true"></label>
     <a class="btn" id="btn-pub" href="/api/publier" title="Publie le Gantt de cette période (versions à venir seulement) en lecture seule">⇪ Publier</a>
-    <button class="btn" id="btn-ppt" title="Générer la roadmap PowerPoint sur cette période">⬇ Export PPT</button>
-    <button class="btn" id="btn-drawio" title="Roadmap de cette période en fichier draw.io (modifiable)">⬇ draw.io</button>
-    <button class="btn" id="btn-params" title="Paramètres : titre, thème, publication, pôles, couleurs…" aria-label="Paramètres">⚙</button>
+    <details class="menu" id="menu">
+      <summary class="btn" title="Exports, import des dépôts, paramètres">☰ Menu</summary>
+      <div class="menu-pop">
+        <button id="btn-ppt">📊 Export PowerPoint<small>roadmap de la période affichée</small></button>
+        <button id="btn-drawio">✏ Export draw.io<small>même roadmap, modifiable</small></button>
+        <button id="btn-import-tout">⤓ Importer tous les dépôts<small>ROADMAP.md, CHANGELOG.md et tags Git</small></button>
+        <hr>
+        <button id="btn-params">⚙ Paramètres<small>titre, thème, publication, équipe, pôles…</small></button>
+      </div>
+    </details>
     <button class="btn primary" id="btn-new">＋ Projet</button>
   </div>
 </header>
@@ -167,7 +174,7 @@
 <dialog class="detail params" id="params" aria-labelledby="pr-titre">
   <form id="pr-form">
     <h3 id="pr-titre">⚙ Paramètres</h3>
-    <p class="muted">Enregistrés dans <code id="pr-chemin"></code></p>
+    <nav class="pr-nav" id="pr-nav" aria-label="Rubriques des paramètres"></nav>
     <fieldset><legend>Application</legend>
       <label>Titre<input name="application.titre" required maxlength="80"></label>
       <div class="grid2">
@@ -204,7 +211,7 @@
       <div><button type="button" class="btn" id="pr-add-pole">＋ Pôle</button></div>
     </fieldset>
     <p class="ver-warn" id="pr-msg" role="status" hidden></p>
-    <div class="detail-foot"><button type="button" class="btn" id="pr-close">Annuler</button> <button class="btn primary">Enregistrer</button></div>
+    <div class="detail-foot"><span class="muted pr-fichier">Fichier : <code id="pr-chemin"></code></span><button type="button" class="btn" id="pr-close">Annuler</button> <button class="btn primary">Enregistrer</button></div>
   </form>
 </dialog>
 

@@ -46,7 +46,7 @@ roadmap-bancs/
 ## Configuration
 
 Rien n'est écrit en dur dans le code : titre, thème, port, pôles (nom, abréviation, couleur), couleurs,
-serveur et lien de publication, auteur du PPT. Tout se règle dans **⚙ Paramètres** (en haut à droite).
+serveur et lien de publication, auteur du PPT. Tout se règle dans **☰ Menu → ⚙ Paramètres** (en haut), une rubrique par onglet.
 
 Fichiers lus dans cet ordre, chacun complétant le précédent :
 
@@ -141,7 +141,7 @@ Un clic sur l'icône démarre le serveur et ouvre le navigateur ; un 2e clic rou
   Clic sur une version (en production, à déployer, prochaine) : ce qu'elle apporte.
   **⇪ Publier** envoie deux pages : `http://<serveur>/` (roadmap + production) et
   `http://<serveur>/production.html` (seulement la vue production, pour l'équipe prod).
-- **⬇ Export PPT** : roadmap PowerPoint sur la période choisie. **⬇ draw.io** : la même roadmap en fichier `.drawio` modifiable.
+- **☰ Menu → Export PowerPoint** : roadmap PowerPoint sur la période choisie. **Export draw.io** : la même roadmap en fichier `.drawio` modifiable.
 - **⇪ Publier** : page HTML autonome en lecture seule : le Gantt de la période choisie, versions à venir seulement. Sans `config.json` : téléchargée (à déposer sur Teams,
   SharePoint, un dossier réseau). Avec `config.json` : envoyée sur la Raspberry.
 

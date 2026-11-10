@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 ### Added
+- Barre du haut allégée : Export PowerPoint, Export draw.io, Importer tous les dépôts et ⚙ Paramètres regroupés dans « ☰ Menu »
+- ⚙ Paramètres : une rubrique par onglet (Application, Publication, PowerPoint, Couleurs, Équipe, Pôles) ; un champ obligatoire vide ouvre son onglet
 - 📦 En production : une ligne par poste et une colonne « Poste » (le nom du poste n'est plus répété dans État et En production)
 - Période du Gantt (Du / au) : bouton 📅 calendrier des mois (Chrome / Edge)
 - Fiche projet : bouton 📅 calendrier sur les dates de début et de fin des versions (la saisie au clavier reste possible : AAAA-MM, ?)
