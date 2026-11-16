@@ -50,6 +50,7 @@
       <div class="legend" id="legend"></div>
     </div>
     <div class="gantt-wrap"><div class="gantt" id="gantt"></div></div>
+    <div class="legend legend-eq" id="legend-eq" aria-label="Équipe : une couleur par personne"></div>
     <section class="equipe-vue" id="jalons-vue" hidden aria-label="Jalons à venir"></section>
     <section class="equipe-vue" id="equipe-vue" hidden aria-label="Qui travaille sur quoi"></section>
     <details class="jalons" id="hors-slide" hidden><summary></summary><div class="eq-items"></div></details>
@@ -94,8 +95,9 @@
       <label>Nom<input id="f-nom" required></label>
       <label>Pôle<select id="f-pole"></select></label>
     </div>
-    <div class="champ">Équipe <span class="muted">(cliquer pour choisir ; annuaire dans ⚙ Paramètres)</span>
+    <div class="champ">Équipe <span class="muted">(taper un nom puis Entrée : suggestions de l'annuaire, un nouveau nom y est ajouté ; ✕ pour retirer)</span>
       <div id="f-ressources"></div>
+      <datalist id="annuaire-dl"></datalist>
     </div>
     <label>Postes <span class="muted">(optionnel — si le banc tourne sur plusieurs postes, séparés par des virgules : un état par poste dans 📦 En production)</span>
       <input id="f-postes" maxlength="900" placeholder="Poste A, Poste B">
@@ -146,6 +148,16 @@
 </dialog>
 
 <!-- identification auprès du serveur Git (lien du dépôt) -->
+<dialog class="detail" id="import-choix" aria-labelledby="ic-titre">
+  <form method="dialog">
+    <h3 id="ic-titre">⤓ Importer du dépôt</h3>
+    <p class="muted">Le projet a déjà des versions. Que faire de celles lues dans le dépôt ?</p>
+    <p><b>Fusionner</b> : ajoute les versions manquantes et complète les champs vides, rien n'est effacé.<br>
+       <b>Tout remplacer</b> : les versions du projet deviennent exactement celles du dépôt (versions, dates, notes, équipes saisies ici sont perdues).</p>
+    <div class="detail-foot"><button class="btn" value="">Annuler</button> <button class="btn" value="remplacer">Tout remplacer</button> <button class="btn primary" value="fusion" autofocus>Fusionner</button></div>
+  </form>
+</dialog>
+
 <dialog class="detail" id="ident" aria-labelledby="id-titre">
   <form id="id-form" autocomplete="off">
     <h3 id="id-titre">🔑 Identifiants Git</h3>
@@ -182,9 +194,13 @@
         <label>Thème<select name="application.theme"><option value="sombre">Sombre</option><option value="clair">Clair</option></select></label>
       </div>
       <label class="check"><input type="checkbox" name="application.qui_travaille"> Afficher « 👥 Qui travaille sur quoi » sous le Gantt (application et page publiée)</label>
+      <label class="check"><input type="checkbox" name="application.points_equipe"> Afficher l'équipe sur les barres du Gantt : un point de couleur par personne (application et page publiée)</label>
       <label>Port <span class="muted">(pris en compte au prochain lancement)</span><input name="application.port" type="number" min="1024" max="65535" required></label>
     </fieldset>
     <fieldset><legend>Publication</legend>
+      <label>Envoi <span class="muted">(clé SSH dans les deux cas)</span><select name="publication.methode">
+        <option value="scp">scp — copie directe sur le serveur (comme avant)</option>
+        <option value="rsync">rsync — n'envoie que si la page a changé (Linux ; absent de Windows par défaut)</option></select></label>
       <label>Serveur <span class="muted">(vide = « ⇪ Publier » télécharge le fichier)</span><input name="publication.serveur" placeholder="utilisateur@serveur:/var/www/roadmap/index.html"></label>
       <label>Lien donné aux collègues<input name="publication.lien" placeholder="http://nom-du-serveur.local/"></label>
       <label class="check"><input type="checkbox" name="publication.terminees"> Montrer aussi les versions terminées sur la période publiée</label>
@@ -203,8 +219,9 @@
         <label>En retard<input type="color" name="couleurs.retard"></label>
       </div>
     </fieldset>
-    <fieldset><legend>Équipe <span class="muted">(une personne par ligne : choisies en un clic dans les fiches)</span></legend>
-      <textarea id="pr-equipe" rows="5" placeholder="A. Dupont&#10;B. Durand" aria-label="Annuaire de l'équipe, une personne par ligne"></textarea>
+    <fieldset><legend>Équipe <span class="muted">(nom · couleur des points sur le Gantt : choisies en un clic dans les fiches)</span></legend>
+      <div id="pr-equipe"></div>
+      <div><button type="button" class="btn" id="pr-add-pers">＋ Personne</button></div>
     </fieldset>
     <fieldset><legend>Pôles <span class="muted">(nom · abréviation · couleur)</span></legend>
       <div id="pr-poles"></div>

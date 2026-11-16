@@ -83,6 +83,8 @@ def save_config(data):
     serveur = _texte(pub.get("serveur", ""), "Serveur de publication", 200, True)
     if serveur and not re.fullmatch(r"[\w.-]+@[\w.-]+:/\S+", serveur):
         raise Invalid("Serveur de publication : format utilisateur@hôte:/chemin/index.html")
+    if pub.get("methode", "scp") not in ("scp", "rsync"):
+        raise Invalid("Envoi de la publication : « scp » ou « rsync »")
     lien = _texte(pub.get("lien", ""), "Lien de publication", 200, True)
     if lien and not re.fullmatch(r"https?://\S+", lien):
         raise Invalid("Lien de publication : adresse http://… ou https://…")
@@ -97,6 +99,8 @@ def save_config(data):
         propres.append({"nom": nom, "court": _texte(p.get("court"), f"Pôle « {nom} » : abréviation", 12),
                         "couleur": couleur(p.get("couleur"), f"Pôle « {nom} »")})
     noms = [p["nom"] for p in propres]
+    equipe = _check_ressources(cfg.get("equipe", []), maxi=200)
+    ec = cfg.get("equipe_couleurs") if isinstance(cfg.get("equipe_couleurs"), dict) else {}
     if len(set(noms)) != len(noms):
         raise Invalid("Pôles : deux pôles portent le même nom")
     utilises = {p.get("pole") for p in _read_list()} - set(noms) - {""}
@@ -106,12 +110,14 @@ def save_config(data):
     propre = {
         "application": {"titre": _texte(app.get("titre"), "Titre", 80), "titre_court": _texte(app.get("titre_court"), "Titre court", 40),
                         "theme": app["theme"], "port": app["port"],
-                        "qui_travaille": _booleen(app.get("qui_travaille"), "Qui travaille sur quoi")},
+                        "qui_travaille": _booleen(app.get("qui_travaille"), "Qui travaille sur quoi"),
+                        "points_equipe": _booleen(app.get("points_equipe"), "Points de couleur de l'équipe")},
         "poles": propres,
         "couleurs": {k: couleur(coul.get(k), f"Couleur « {k} »") for k in ("aujourdhui", "jalon", "retard")}
                     | {"supplementaires": [couleur(c, "Couleurs supplémentaires") for c in (sup if isinstance(sup, list) else [None])]},
-        "publication": {"serveur": serveur, "lien": lien, "terminees": _booleen(pub.get("terminees"), "Versions terminées")},
-        "equipe": _check_ressources(cfg.get("equipe", []), maxi=200),  # annuaire : choix en un clic dans les fiches
+        "publication": {"methode": pub.get("methode", "scp"), "serveur": serveur, "lien": lien, "terminees": _booleen(pub.get("terminees"), "Versions terminées")},
+        "equipe": equipe,  # annuaire : choix en un clic dans les fiches
+        "equipe_couleurs": {n: couleur(c, f"Couleur de « {n} »") for n, c in ec.items() if n in equipe},  # personnes retirées : oubliées
         "ppt": {"auteur": _texte(ppt.get("auteur", ""), "Auteur du PPT", 60, True),
                 "mention": _texte(ppt.get("mention", ""), "Mention du PPT", 60, True)},
     }
@@ -505,8 +511,9 @@ def tag_dates(depot):
     return res
 
 
-def import_depot(pid):
-    """Fusionne ROADMAP.md (ou RELEASE.md) / CHANGELOG.md du dépôt + dates des tags Git. Renvoie (projet, message)."""
+def import_depot(pid, remplacer=False):
+    """Fusionne ROADMAP.md (ou RELEASE.md) / CHANGELOG.md du dépôt + dates des tags Git. Renvoie (projet, message).
+    remplacer : les versions du projet sont remplacées par celles du dépôt (sinon seuls les manques sont ajoutés)."""
     p = get(pid)
     lire, tags, origine = _source(p)
     # ROADMAP.md (ou l'ancien nom RELEASE.md) = le prévu, prioritaire ; CHANGELOG.md = le livré, complète les champs vides
@@ -529,7 +536,9 @@ def import_depot(pid):
             v["statut"] = v["statut"] or "Terminé"
             v["fin"] = v["fin"] or tags[k]
     avant = {R.vkey(v["version"]) or v["version"] for v in p["versions"]}
-    p["versions"] = R.merge(p["versions"], imported)
+    p["versions"] = R.merge([] if remplacer else p["versions"], imported)
+    # dernier tag d'une version inférieure, pas après celui-ci (un correctif v1.0.1 tagué après v1.1.0 ne compte pas)
+    debuts = {k: max((d2 for k2, d2 in tags.items() if k2 < k and d2 <= d), default="") for k, d in tags.items()}
     livrees = []
     for v in p["versions"]:  # livrée (tag Git, sinon date du CHANGELOG) : plus « en cours », « planifiée » ou « en retard »
         k = R.vkey(v["version"])
@@ -539,6 +548,8 @@ def import_depot(pid):
                 v["prevu"] = v["fin"]  # fin prévue du ROADMAP.md gardée : dérive réelle (prévu → livré)
             v["statut"], v["fin"] = "Terminé", d
             livrees.append(v["version"])
+        if not v.get("debut") and debuts.get(k) and v["fin"] and debuts[k] <= v["fin"]:
+            v["debut"] = debuts[k]  # début inconnu : livraison de la version précédente
     rattache = ""
     if unreleased:  # [Unreleased] = la prochaine version prévue, pas une version à part
         cible = R.prochaine(p["versions"])
@@ -557,7 +568,8 @@ def import_depot(pid):
     write_atomic(PROJETS, json.dumps(lst, ensure_ascii=False, indent=2) + "\n")
     src = " + ".join(nom for nom, _ in files) or "aucun fichier"
     ajoutees = len({R.vkey(v["version"]) or v["version"] for v in saved["versions"]} - avant)
-    msg = f"{origine} : {src} + {len(tags)} tag(s) Git : {ajoutees} version(s) ajoutée(s)"
+    msg = (f"{origine} : {src} + {len(tags)} tag(s) Git : "
+           + (f"{len(saved['versions'])} version(s), projet remplacé" if remplacer else f"{ajoutees} version(s) ajoutée(s)"))
     return saved, msg + (f", passée(s) à Terminé : {', '.join(livrees)}" if livrees else "") + rattache
 
 

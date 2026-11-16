@@ -24,6 +24,17 @@ function color(pole) {
 }
 const court = pole => poleCfg(pole)?.court || pole;
 const liste = r => Array.isArray(r) ? r : String(r || "").split(",").map(s => s.trim()).filter(Boolean);
+// couleur d'une personne : rang dans l'annuaire, puis les autres noms par ordre alphabétique (10 couleurs, puis on recommence)
+const PERSO = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac"];
+function persoColor(n) {
+  if (S.config.equipe_couleurs?.[n]) return S.config.equipe_couleurs[n];   // choisie dans les paramètres
+  const ann = S.config.equipe || [];
+  if (ann.includes(n)) return PERSO[ann.indexOf(n) % PERSO.length];
+  const autres = [...new Set(S.projets.flatMap(p => [p.ressources, ...p.versions.map(v => v.ressources)].flatMap(liste)))]
+    .filter(x => !ann.includes(x)).sort();
+  return PERSO[(ann.length + autres.indexOf(n)) % PERSO.length];
+}
+const pointsEquipe = noms => noms.length && S.config.application.points_equipe ? `<span class="eq-pts" aria-hidden="true">${noms.map(n => `<i style="background:${persoColor(n)}"></i>`).join("")}</span>` : "";
 const equipeV = (p, v) => liste(v.ressources).length ? liste(v.ressources) : liste(p.ressources);   // version, sinon projet
 const ETATS = { ok: ["✅", "Opérationnel"], maj: ["🔧", "En mise à jour"], degrade: ["⚠", "Dégradé"], panne: ["⛔", "En panne"] };
 // postes d'un banc (fiche projet) : chacun son état et sa version installée ; sans poste, le projet est le banc
@@ -190,10 +201,11 @@ function grouped(list) {
 function renderGantt() {
   const t0 = toDate($("#debut").value), t1 = toDate($("#fin").value, true);
   const g = $("#gantt");
+  g.classList.toggle("eq", !!S.config.application.points_equipe);   // lignes un peu plus hautes : points sous la version
   if (!t0 || !t1 || t1 < t0) { g.innerHTML = `<p class="empty">Choisis une période valide.</p>`; return; }
   const span = (t1 - t0) / 864e5 + 1;
   const trackPx = g.clientWidth - 34 - (parseFloat(getComputedStyle(g).getPropertyValue("--nom")) || 230);
-  const vus = { poles: new Set(), statuts: new Set(), prevu: false };   // pour une légende limitée à ce qui est affiché   // largeur des pistes (colonnes pôle 34 px + nom 230 px)
+  const vus = { poles: new Set(), statuts: new Set(), personnes: new Set(), prevu: false };   // pour une légende limitée à ce qui est affiché   // largeur des pistes (colonnes pôle 34 px + nom 230 px)
   const pct = d => Math.min(100, Math.max(0, ((d - t0) / 864e5) / span * 100));
   const today = toDate(S.today);
   let months = "", grid = "";
@@ -216,7 +228,7 @@ function renderGantt() {
         if (b < t0 || a > t1) continue;
         const l = pct(a), w = Math.max(pct(b) - l, 0.6), der = derive(v);
         const txt = (["Bloqué", "En retard"].includes(v.statut) ? "⚠ " : "") + v.version + fmtDer(der);
-        const need = (txt.length * 7 + 16) / trackPx * 100;      // largeur du texte, en % de la piste
+        const need = (Math.max(txt.length * 7, S.config.application.points_equipe ? equipeV(p, v).length * 9 : 0) + 16) / trackPx * 100;   // points sous le texte      // largeur du texte, en % de la piste
         // barre trop courte : élargie juste assez pour son numéro (vers la gauche au bord droit) ; vraies dates au survol
         const wd = Math.max(w, need), ld = Math.max(0, Math.min(l, 100 - wd));
         bars.push({ v, a, b, l: ld, w: wd, der, txt, need, x0: ld, x1: ld + wd, r0: l, r1: l + w });
@@ -243,9 +255,9 @@ function renderGantt() {
           const ghost = der && pv >= t0 && pv <= t1 ? `<div class="prevu" style="left:${pct(pv)}%" title="${esc(p.nom)} ${esc(v.version)} : fin prévue initialement ${fmtD(v.prevu)}"></div>` : "";
           const pr = toDate(v.prod), prod = pr && pr >= t0 && pr <= t1
             ? `<div class="prod-mark" style="left:${pct(pr)}%" title="${esc(p.nom)} ${esc(v.version)} : en production depuis le ${fmtD(v.prod)}">▲</div>` : "";
-          vus.statuts.add(v.statut); if (ghost) vus.prevu = true; if (prod) vus.prod = true;
+          vus.statuts.add(v.statut); if (S.config.application.points_equipe) equipeV(p, v).forEach(n => vus.personnes.add(n)); if (ghost) vus.prevu = true; if (prod) vus.prod = true;
           return `${ghost}${prod}<div class="bar ${stc(v.statut)}" style="left:${l}%;width:${w}%;--c:${c}" title="${esc(tip)}"
-                    data-id="${p.id}" data-v="${esc(v.version)}"><span>${esc(txt)}</span></div>`;
+                    data-id="${p.id}" data-v="${esc(v.version)}"><span>${esc(txt)}</span>${pointsEquipe(equipeV(p, v))}</div>`;
         }).join("");
         rows += `<div class="g-row"><div class="g-name" data-id="${p.id}" title="${esc(p.nom + (equipe(p) ? "\nÉquipe : " + equipe(p) : ""))}">${i ? "" : esc(p.nom)}</div>
                  <div class="g-track">${grid}${items}</div></div>`;
@@ -286,6 +298,7 @@ function renderGantt() {
     Object.keys(STYLES).filter(s => vus.statuts.has(s)).map(s => `<span><i style="${STYLES[s]}"></i>${s}</span>`).join("") +
     (vus.prevu ? `<span><i style="width:0;border-left:2px solid var(--text)"></i>Fin prévue initialement</span>` : "") +
     (vus.prod ? `<span><b class="prod-leg">▲</b>Mise en production</span>` : "");
+  $("#legend-eq").innerHTML = [...vus.personnes].sort().map(n => `<span><i class="eq-leg" style="background:${persoColor(n)}"></i>${esc(n)}</span>`).join("");
 }
 
 // ---------- détail d'une version (page publiée) ----------
@@ -360,6 +373,13 @@ function renderPrPoles() {
       <input type="color" data-k="couleur" value="${esc(p.couleur)}" aria-label="Couleur du pôle">
       <button type="button" class="icon" data-pdel="${i}" aria-label="Supprimer le pôle ${esc(p.nom)}">✕</button></div>`).join("");
 }
+let prEquipe = [];   // [{ nom, couleur }]
+function renderPrEquipe() {
+  $("#pr-equipe").innerHTML = prEquipe.map((p, i) => `<div class="pr-pers" data-i="${i}">
+      <input data-k="nom" value="${esc(p.nom)}" required maxlength="60" aria-label="Nom" placeholder="Nom">
+      <input type="color" data-k="couleur" value="${esc(p.couleur)}" aria-label="Couleur de ${esc(p.nom)}">
+      <button type="button" class="icon" data-edel="${i}" aria-label="Retirer ${esc(p.nom)} de l'annuaire">✕</button></div>`).join("");
+}
 function openParams() {
   for (const el of $("#pr-form").querySelectorAll("[name]")) {
     const [a, b] = el.name.split(".");
@@ -368,7 +388,7 @@ function openParams() {
   }
   $("#pr-chemin").textContent = S.configChemin;
   prPoles = structuredClone(S.config.poles); renderPrPoles(); prMsg("");
-  $("#pr-equipe").value = annuaire().join("\n");
+  prEquipe = annuaire().map(nom => ({ nom, couleur: persoColor(nom) })); renderPrEquipe();
   prSection(0);
   $("#params").showModal();
 }
@@ -385,6 +405,18 @@ $("#pr-form").addEventListener("invalid", e => { const i = prSets.indexOf(e.targ
 $("#btn-params").addEventListener("click", openParams);
 $("#pr-close").addEventListener("click", () => $("#params").close());
 $("#pr-add-pole").addEventListener("click", () => { prPoles.push({ nom: "", court: "", couleur: "#888888" }); renderPrPoles(); });
+$("#pr-add-pers").addEventListener("click", () => {
+  prEquipe.push({ nom: "", couleur: PERSO[prEquipe.length % PERSO.length] }); renderPrEquipe();
+  $("#pr-equipe").lastElementChild.querySelector("input").focus();
+});
+$("#pr-equipe").addEventListener("input", e => {
+  const i = e.target.closest(".pr-pers")?.dataset.i, k = e.target.dataset.k;
+  if (i !== undefined && k) prEquipe[+i][k] = e.target.value;
+});
+$("#pr-equipe").addEventListener("click", e => {
+  const i = e.target.closest("[data-edel]")?.dataset.edel;
+  if (i !== undefined) { prEquipe.splice(+i, 1); renderPrEquipe(); }
+});
 $("#pr-poles").addEventListener("input", e => {
   const i = e.target.closest(".pr-pole")?.dataset.i, k = e.target.dataset.k;
   if (i !== undefined && k) prPoles[+i][k] = e.target.value;
@@ -400,7 +432,8 @@ $("#pr-test").addEventListener("click", e => busy(e.target, async () => {
 }));
 $("#pr-form").addEventListener("submit", async e => {
   e.preventDefault();
-  const data = { poles: prPoles, equipe: $("#pr-equipe").value.split("\n").map(s => s.trim()).filter(Boolean) };
+  const pers = prEquipe.map(p => ({ ...p, nom: p.nom.trim().replace(/\s+/g, " ") })).filter(p => p.nom);   // espaces comme le serveur
+  const data = { poles: prPoles, equipe: pers.map(p => p.nom), equipe_couleurs: Object.fromEntries(pers.map(p => [p.nom, p.couleur])) };
   for (const el of e.target.querySelectorAll("[name]")) {
     const [a, b] = el.name.split(".");
     (data[a] ??= {})[b] = el.type === "number" ? Number(el.value) : el.type === "checkbox" ? el.checked : el.value;
@@ -460,7 +493,7 @@ function renderEquipe(t0, t1) {
   }).sort((x, y) => y.afaire.length - x.afaire.length || x.n.localeCompare(y.n));   // les plus chargés d'abord
   box.innerHTML = `<h3>👥 Qui travaille sur quoi <span class="muted">${per(t0)} → ${per(t1)}</span></h3><div class="eq-table">` +
     lignes.map(({ n, faits, afaire }) => `
-      <div class="eq-nom">${esc(n)}</div>
+      <div class="eq-nom"><i class="eq-leg" style="background:${persoColor(n)}"></i>${esc(n)}</div>
       <div class="eq-items">${afaire.map(chip).join("") || '<span class="muted">rien en cours</span>'}
         ${faits.length ? `<span class="eq-faits" hidden><span class="eq-sep" aria-hidden="true"></span>${faits.map(chip).join("")}</span>` : ""}</div>
       <div class="eq-nb">${faits.length ? `<button type="button" class="eq-voir" aria-expanded="false"
@@ -735,36 +768,55 @@ function renderCards() {
     }).join("")}</div>`).join("") || `<p class="empty">Aucun projet.</p>`;
 }
 
-// ---------- choix de l'équipe (annuaire des paramètres, en un clic) ----------
+// ---------- choix de l'équipe : étiquettes + saisie avec suggestions de l'annuaire ----------
 const annuaire = () => S.config.equipe || [];
+const majAnnuaireDl = () => { $("#annuaire-dl").innerHTML = annuaire().map(n => `<option value="${esc(n)}">`).join(""); };
 function pickerHtml(scope, choisis) {
-  const noms = [...new Set([...annuaire(), ...choisis])];   // + noms déjà affectés absents de l'annuaire
   return `<div class="picker" data-scope="${scope}">` +
-    noms.map(n => `<button type="button" class="pick" data-nom="${esc(n)}" aria-pressed="${choisis.includes(n)}">${esc(n)}</button>`).join("") +
-    `<input class="pick-add" maxlength="60" placeholder="+ personne" aria-label="Ajouter une personne à l'annuaire et à l'équipe"></div>`;
+    choisis.map(n => `<span class="tag"><i class="eq-leg" style="background:${persoColor(n)}"></i>${esc(n)}<button type="button"
+      class="tag-x" data-nom="${esc(n)}" aria-label="Retirer ${esc(n)}" title="Retirer">✕</button></span>`).join("") +
+    `<input class="pick-add" list="annuaire-dl" maxlength="60" placeholder="${choisis.length ? "+ ajouter" : "Ajouter une personne…"}"
+      aria-label="Ajouter une personne à l'équipe : nom de l'annuaire ou nouveau nom (Entrée)"></div>`;
 }
 const cibleEquipe = scope => scope === "projet" ? edit : edit.versions[+scope.slice(2)];
-function choisir(picker, nom, garder) {   // garder : ajout (jamais retirer)
-  const scope = picker.dataset.scope, obj = cibleEquipe(scope), l = liste(obj.ressources);
-  obj.ressources = l.includes(nom) ? (garder ? l : l.filter(x => x !== nom)) : [...l, nom];
+function majEquipe(picker, noms) {   // remplace l'équipe de la cible, redessine, garde le curseur dans la saisie
+  const scope = picker.dataset.scope;
+  cibleEquipe(scope).ressources = noms;
   setDirty(true);
   if (scope === "projet") renderVersions();   // le rappel « équipe du projet » des versions suit
-  picker.outerHTML = pickerHtml(scope, obj.ressources);
+  picker.outerHTML = pickerHtml(scope, noms);
+  $(`#drawer .picker[data-scope="${scope}"] .pick-add`)?.focus();
+}
+async function ajouterPersonnes(input) {   // « A, B » collé : plusieurs personnes d'un coup
+  const picker = input.closest(".picker"), l = liste(cibleEquipe(picker.dataset.scope).ressources);
+  const saisis = input.value.split(",").map(n => n.replace(/\s+/g, " ").trim()).filter(Boolean);
+  if (!saisis.length) return;
+  const nouveaux = saisis.filter(n => !annuaire().some(x => x.toLowerCase() === n.toLowerCase()));
+  try {
+    if (nouveaux.length) {   // nouvelle personne : rangée dans l'annuaire
+      S.config = (await (await api("PUT", "/api/config", { equipe: [...annuaire(), ...nouveaux] })).json()).config;
+      majAnnuaireDl();
+    }
+  } catch (err) { return toast(err.message, true); }
+  const noms = saisis.map(n => annuaire().find(x => x.toLowerCase() === n.toLowerCase()) || n);   // orthographe de l'annuaire
+  majEquipe(picker, [...new Set([...l, ...noms])]);
 }
 $("#drawer").addEventListener("click", e => {
-  const b = e.target.closest(".pick");
-  if (b) choisir(b.closest(".picker"), b.dataset.nom);
+  const x = e.target.closest(".tag-x");
+  if (x) { const picker = x.closest(".picker"); majEquipe(picker, liste(cibleEquipe(picker.dataset.scope).ressources).filter(n => n !== x.dataset.nom)); }
+  else if (e.target.matches(".picker")) e.target.querySelector(".pick-add").focus();   // clic dans le cadre : on peut taper
 });
-$("#drawer").addEventListener("keydown", async e => {
-  if (e.key !== "Enter" || !e.target.matches(".pick-add")) return;
-  e.preventDefault();
-  const nom = e.target.value.replace(/\s+/g, " ").trim(), picker = e.target.closest(".picker");
-  if (!nom) return;
-  try {
-    if (!annuaire().some(n => n.toLowerCase() === nom.toLowerCase()))   // nouvelle personne : rangée dans l'annuaire
-      S.config = (await (await api("PUT", "/api/config", { equipe: [...annuaire(), nom] })).json()).config;
-    choisir(picker, annuaire().find(n => n.toLowerCase() === nom.toLowerCase()) || nom, true);
-  } catch (err) { toast(err.message, true); }
+$("#drawer").addEventListener("keydown", e => {
+  if (!e.target.matches(".pick-add")) return;
+  if (e.key === "Enter" || e.key === ",") { e.preventDefault(); ajouterPersonnes(e.target); }
+  else if (e.key === "Backspace" && !e.target.value) {   // effacer dans une saisie vide : retire la dernière personne
+    const picker = e.target.closest(".picker"), l = liste(cibleEquipe(picker.dataset.scope).ressources);
+    if (l.length) { e.preventDefault(); majEquipe(picker, l.slice(0, -1)); }
+  }
+});
+$("#drawer").addEventListener("input", e => {   // nom choisi dans les suggestions : ajouté tout de suite
+  if (e.target.matches(".pick-add") && (!e.inputType || e.inputType === "insertReplacementText") && annuaire().includes(e.target.value))
+    ajouterPersonnes(e.target);
 });
 
 // ---------- éditeur ----------
@@ -789,6 +841,7 @@ function openEditor(p) {
   $("#f-pole").innerHTML = [...new Set([...S.poles, edit.pole])].map(x => `<option ${x === edit.pole ? "selected" : ""}>${esc(x)}</option>`).join("");
   $("#f-depot").value = edit.depot || "";
   $("#f-postes").value = (edit.postes || []).map(x => x.nom).join(", ");
+  majAnnuaireDl();
   $("#f-ressources").innerHTML = pickerHtml("projet", liste(edit.ressources));
   setBranches(edit.branche ? [edit.branche] : [], "", edit.branche || "");
   majDepot();
@@ -1029,8 +1082,17 @@ $("#b-del").addEventListener("click", async () => {
 });
 $("#b-import").addEventListener("click", e => busy(e.target, async () => {
   if (dirty && !(await save())) return;
+  let choix = "fusion";
+  if (edit.versions.length) {   // versions déjà là : fusionner ou écraser, au choix
+    const dlg = $("#import-choix");
+    dlg.returnValue = "";
+    dlg.showModal();
+    choix = await new Promise(r => dlg.addEventListener("close", () => r(dlg.returnValue), { once: true }));
+    if (!choix) return;
+    if (choix === "remplacer" && !confirm(`Remplacer les ${edit.versions.length} version(s) de « ${edit.nom} » par celles du dépôt ?`)) return;
+  }
   try {
-    const d = await (await api("POST", `/api/projets/${edit.id}/import`)).json();
+    const d = await (await api("POST", `/api/projets/${edit.id}/import`, { remplacer: choix === "remplacer" })).json();
     await load(); openEditor(d.projet); toast(d.message);
   } catch (err) { toast(err.message, true); }
 }));

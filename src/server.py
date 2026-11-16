@@ -21,6 +21,8 @@ STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 BUILD_PPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ppt", "build_roadmap.py")
 EXPORTS = os.path.join(store.DATA, "exports")
 MAX_BODY = 5 * 1024 * 1024
+# nom public derrière Apache (ex. testbench-roadmap.keas-group.com) : ses pages ont le droit d'écrire
+HOTE_PUBLIC = os.environ.get("ROADMAP_HOTE", "").strip()
 VERROU = threading.Lock()  # une écriture à la fois : deux enregistrements rapprochés ne s'écrasent pas
 
 
@@ -83,7 +85,7 @@ def publier(debut, fin, vue=""):
             | {"versions": [{k: v[k] for k in ("version", "statut", "debut", "fin", "prod", "notes")} for v in p["versions"]]}
             for p in tous if p["prod_publie"]]  # onglet « En production » : projets choisis, tout l'historique, sans les notes
     data = {"projets": projets, "parc": parc, "poles": store.poles(), "statuts": R.STATUTS, "jalons": store.load_jalons(),
-            "config": {k: cfg[k] for k in ("application", "poles", "couleurs")},  # pas le serveur de publication
+            "config": {k: cfg[k] for k in ("application", "poles", "couleurs", "equipe", "equipe_couleurs")},  # pas le serveur de publication ; annuaire : mêmes couleurs de personnes
             "periode": [debut, fin], "vue": vue, "aujourdhui": date.today().isoformat(),
             "publie": f"{datetime.now():%d/%m/%Y à %H:%M}"}
     snap = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")  # un nom contenant </script> ne casse pas la page
@@ -101,16 +103,20 @@ def publier(debut, fin, vue=""):
 
 
 def envoyer_publication(debut, fin):
-    """Publie la page sur le serveur de consultation (Raspberry) par scp. Renvoie un message."""
+    """Publie la page sur le serveur de consultation (Raspberry) par scp ou rsync (⚙ Paramètres). Renvoie un message."""
     pub = store.config()["publication"]
     cible = pub["serveur"]
     if not cible or cible.startswith("-"):
         raise store.Invalid("Aucun serveur de publication : renseigne-le dans ⚙ Paramètres")
     # deux pages : tout (roadmap + production) et, à côté, production.html pour l'équipe production
     cible_prod = cible.rsplit("/", 1)[0] + "/production.html"
+    # BatchMode : clé SSH obligatoire, jamais de question de mot de passe qui bloquerait
+    ssh = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+    envoi = (["rsync", "-a", "--chmod=F644", "-e", "ssh " + " ".join(ssh), "--"] if pub.get("methode") == "rsync"
+             else ["scp", "-q", *ssh])
     for fichier, dest in ((publier(debut, fin), cible), (publier(debut, fin, "prod"), cible_prod)):
-        try:  # BatchMode : clé SSH obligatoire, jamais de question de mot de passe qui bloquerait
-            r = subprocess.run(["scp", "-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", fichier, dest],
+        try:
+            r = subprocess.run([*envoi, fichier, dest],
                                capture_output=True, text=True, timeout=60)
         except (OSError, subprocess.SubprocessError) as e:
             raise store.Invalid(f"Envoi impossible : {e}")
@@ -178,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
         host = self.headers.get("Host", "")
         origin = self.headers.get("Origin")
         if host.rsplit(":", 1)[0] not in ("127.0.0.1", "localhost") or (
-                method != "GET" and origin and urlparse(origin).netloc != host):
+                method != "GET" and origin and urlparse(origin).netloc not in {host, HOTE_PUBLIC} - {""}):
             return self._send(403, {"erreur": "Requête refusée : elle ne vient pas de l'application"})
         with VERROU if method != "GET" else nullcontext():
             return self._traiter(method, path, m)
@@ -227,7 +233,7 @@ class Handler(BaseHTTPRequestHandler):
                     store.delete(pid)
                     return self._send(200, {"ok": True})
                 if method == "POST" and action == "import":
-                    p, msg = store.import_depot(pid)
+                    p, msg = store.import_depot(pid, self._json().get("remplacer") is True)
                     return self._send(200, {"projet": p, "message": msg})
                 if method == "POST" and action == "livrer":
                     p, msg = store.livrer(pid, str(self._json().get("version", "")))

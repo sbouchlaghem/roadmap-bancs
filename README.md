@@ -68,6 +68,7 @@ Fichiers lus dans cet ordre, chacun complétant le précédent :
 ```
 
 Changer de serveur de publication : ⚙ Paramètres → Publication → nouveau serveur → **Tester la connexion** → Enregistrer.
+Envoi : **scp** (par défaut, copie directe) ou **rsync** (Linux ; à installer sur le poste et le serveur).
 Un pôle encore utilisé par un projet ne peut pas être supprimé ni renommé (changer d'abord le pôle du projet).
 
 ## Prérequis

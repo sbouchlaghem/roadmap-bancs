@@ -105,6 +105,13 @@ class TestStore(unittest.TestCase):
                              "Publié : http://pi/ — équipe production : http://pi/production.html")
             self.assertEqual(snapshot(dest)["vue"], "")  # page complète
             self.assertEqual(snapshot(os.path.join(TMP, "production.html"))["vue"], "prod")  # page de l'équipe production
+            os.remove(dest)
+            # chemin local : rsync aussi sait copier sans SSH (remplace la Raspberry)
+            store.write_atomic(store.CONFIG, '{"publication": {"methode": "rsync", "serveur": "%s"}}' % dest)
+            self.assertTrue(server.envoyer_publication("2026-09", "2027-01").startswith("Publié : "))
+            self.assertEqual(snapshot(dest)["vue"], "")
+            with self.assertRaises(store.Invalid):
+                store.save_config({"publication": {"methode": "ftp"}})
             store.write_atomic(store.CONFIG, '{"publication": {"serveur": "-oProxyCommand=x"}}')
             with self.assertRaises(store.Invalid):
                 server.envoyer_publication("2026-09", "2027-01")  # pas d'option déguisée en cible
@@ -116,6 +123,11 @@ class TestStore(unittest.TestCase):
             c = store.config()  # valeurs par défaut livrées
             self.assertEqual((c["application"]["theme"], len(store.poles())), ("sombre", 6))
             self.assertFalse(c["application"]["qui_travaille"])  # bloc « qui travaille sur quoi » masqué par défaut
+            self.assertTrue(c["application"]["points_equipe"])  # points de l'équipe sur les barres : affichés par défaut
+            c = store.save_config({"equipe": ["Alice", "Bob"], "equipe_couleurs": {"Alice": "#112233", "Ancien": "#445566"}})
+            self.assertEqual(c["equipe_couleurs"], {"Alice": "#112233"})  # couleur d'une personne hors annuaire : oubliée
+            with self.assertRaises(store.Invalid):
+                store.save_config({"equipe_couleurs": {"Alice": "rouge"}})
             c = store.save_config({"application": {"titre": "Ma roadmap", "theme": "clair"},
                                    "publication": {"serveur": "roadmap@10.0.0.2:/var/www/roadmap/index.html", "lien": "http://x/"},
                                    "ppt": {"auteur": "Moi"}})
@@ -169,6 +181,32 @@ class TestStore(unittest.TestCase):
         for bad in ("--upload-pack=touch /tmp/x", "ext::sh -c touch% /tmp/x", "https://x/a b"):
             with self.assertRaises(store.Invalid, msg=bad):
                 store.save({"nom": "Piège", "depot": bad})
+
+    def test_debut_depuis_tags(self):
+        src = tempfile.mkdtemp(dir=TMP)  # lien Git sans ROADMAP.md ni CHANGELOG.md : tout vient des tags
+        git(src, "init", "-q", "-b", "main")
+        for ver, d in (("v1.0.0", "2026-01-10"), ("v1.1.0", "2026-03-05"), ("v1.0.1", "2026-04-01"), ("v2.0", "2026-06-20")):
+            env = {**os.environ, "GIT_AUTHOR_DATE": d + "T12:00:00", "GIT_COMMITTER_DATE": d + "T12:00:00",
+                   "GIT_AUTHOR_NAME": "T", "GIT_AUTHOR_EMAIL": "t@example.com", "GIT_COMMITTER_NAME": "T", "GIT_COMMITTER_EMAIL": "t@example.com"}
+            subprocess.run(["git", "-C", src, "commit", "-q", "--allow-empty", "-m", ver], env=env, check=True)
+            git(src, "tag", ver)
+        p = store.save({"nom": "TagsSeuls", "depot": "file://" + src})
+        p, _ = store.import_depot(p["id"])
+        self.assertEqual({v["version"]: (v["debut"], v["fin"]) for v in p["versions"]},
+                         {"v2.0.0": ("2026-04-01", "2026-06-20"), "v1.1.0": ("2026-01-10", "2026-03-05"),
+                          "v1.0.1": ("2026-01-10", "2026-04-01"), "v1.0.0": ("", "2026-01-10")})
+
+    def test_import_fusion_ou_remplacement(self):
+        depot = tempfile.mkdtemp(dir=TMP)
+        open(os.path.join(depot, "ROADMAP.md"), "w").write("## [2.0.0] - 2026-11-01 → 2099-12-15\n- du dépôt\n")
+        p = store.save({"nom": "Ecrase", "depot": depot, "versions": [
+            {"version": "2.0.0", "debut": "2026-10-01", "fin": "2099-01-01", "notes": "saisie ici"},
+            {"version": "1.5.0", "statut": "Terminé", "fin": "2026-01-01"}]})
+        p, _ = store.import_depot(p["id"])  # fusion : rien n'est effacé, la saisie garde la main
+        self.assertEqual({v["version"]: v["notes"] for v in p["versions"]}, {"2.0.0": "saisie ici", "1.5.0": ""})
+        p, msg = store.import_depot(p["id"], remplacer=True)  # remplacement : exactement le dépôt
+        self.assertEqual([(v["version"], v["debut"], v["notes"]) for v in p["versions"]], [("v2.0.0", "2026-11-01", "- du dépôt")])
+        self.assertIn("projet remplacé", msg)
 
     def test_identifiants_refuses_avant_git(self):  # aucune commande Git lancée : rien n'est écrit
         for args in (("git@host:x.git", "u", "p"), ("https://h/x.git", "u", "a\nurl=https://piege"),

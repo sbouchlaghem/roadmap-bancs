@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 ### Added
+- ⚙ Paramètres → Publication : choix de l'envoi, **scp** (copie directe, comme avant) ou **rsync**
 - 📦 En production : l'export **⬇ Excel** remplace le CSV : vrai fichier `.xlsx` avec en-tête coloré et figé, pôles à leur couleur, états colorés (vert / bleu / orange / rouge), filtres et largeurs de colonnes
 - Barre du haut allégée : Export PowerPoint, Export draw.io, Importer tous les dépôts et ⚙ Paramètres regroupés dans « ☰ Menu »
 - ⚙ Paramètres : une rubrique par onglet (Application, Publication, PowerPoint, Couleurs, Équipe, Pôles) ; un champ obligatoire vide ouvre son onglet
